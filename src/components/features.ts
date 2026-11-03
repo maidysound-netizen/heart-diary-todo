@@ -6,6 +6,7 @@ export const FEATURES: Record<string, { label: string; sub: string; color: strin
   weekly: { label: "Weekly", sub: "주간 계획", color: "#E3D7F5", to: { name: "weekly" } },
   monthly: { label: "Monthly", sub: "월간 달력", color: "#FFF0B8", to: { name: "monthly" } },
   diary: { label: "Diary", sub: "오늘의 일기", color: "#FBD5DF", to: { name: "diary" } },
+  // 예전에 붙인 Draw 스티커용 (시트에서는 빠짐 — 스티커 판 자체가 그리기 판)
   draw: { label: "Draw", sub: "그림 그리기", color: "#D9EEF7", to: { name: "diary", tool: "draw" } },
   photo: { label: "Picture", sub: "사진 붙이기", color: "#E2F0D9", to: { name: "diary", tool: "photo" } },
   music: { label: "Music", sub: "음악 링크", color: "#F3DDF7", to: { name: "music" } },
@@ -13,4 +14,4 @@ export const FEATURES: Record<string, { label: string; sub: string; color: strin
   decorate: { label: "Decorate", sub: "표지 꾸미기", color: "#F7E1CF", to: { name: "decorate" } },
 };
 
-export const FEATURE_ORDER = ["todo", "weekly", "monthly", "diary", "draw", "photo", "music", "chat", "decorate"];
+export const FEATURE_ORDER = ["todo", "weekly", "monthly", "diary", "photo", "music", "chat", "decorate"];

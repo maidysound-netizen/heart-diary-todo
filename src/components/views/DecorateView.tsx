@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Sheet, useApp } from "../DiaryApp";
+import { useApp } from "../DiaryApp";
+import { At, Paper } from "../Paper";
 import { api, type Settings } from "@/lib/client";
 
 const COVERS = ["#E8A6B5", "#F4C2CF", "#C9B3E6", "#A9D3C4", "#F6D58E", "#A94C68"];
@@ -52,9 +53,13 @@ export function DecorateView() {
   );
 
   return (
-    <Sheet
-      left={
-        <div className="decorate">
+    <Paper
+      label="표지 꾸미기"
+      template="01_blank"
+      decorKey="decorate"
+      content={
+        <>
+          <At x={0.1} y={0.16} w={0.8} h={0.42} className="decorate paper-panel">
           <h2 className="hand center">표지 꾸미기</h2>
           <fieldset className="opt-group">
             <legend>표지 가죽 색</legend>
@@ -65,10 +70,8 @@ export function DecorateView() {
           {group("리본", RIBBONS, settings.ribbon_key, (v) => set({ ribbon_key: v }))}
           {group("체인", CHAINS, settings.chain_key, (v) => set({ chain_key: v }))}
           {group("인형 참", CHARMS, settings.charm_key, (v) => set({ charm_key: v }))}
-        </div>
-      }
-      right={
-        <div className="decorate">
+        </At>
+          <At x={0.1} y={0.6} w={0.8} h={0.3} className="decorate paper-panel">
           <h2 className="hand center">모모의 잔소리</h2>
           <label className="switch">
             <input type="checkbox" checked={settings.nagging_mode} onChange={(e) => set({ nagging_mode: e.target.checked })} />
@@ -83,7 +86,8 @@ export function DecorateView() {
             <button className="btn-primary" onClick={save} disabled={!dirty || saving}>{saving ? "저장 중…" : dirty ? "저장" : "저장됨"}</button>
             <button className="btn-ghost" onClick={async () => { if (dirty) await save(); closeBook(); }}>표지 보러 가기</button>
           </div>
-        </div>
+        </At>
+        </>
       }
     />
   );

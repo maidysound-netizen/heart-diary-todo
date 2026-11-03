@@ -1,11 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Sheet, useApp } from "../DiaryApp";
+import { useApp } from "../DiaryApp";
+import { At, Paper } from "../Paper";
 import { MoodFace } from "../art";
-import { addDays, api, dayRange, hhmm, localYmdOf, parseYmd, today, weekStart, WEEKDAYS, type Todo } from "@/lib/client";
+import { addDays, api, dayRange, hhmm, localYmdOf, parseYmd, today, weekStart, type Todo } from "@/lib/client";
 
 type EntrySum = { id: string; entry_date: string; title: string; mood: string | null };
+
+// 07_weekly.png: 월~일 7칸
+const BOX0 = 0.2214;
+const BOX_STEP = 0.0968;
 
 export function WeeklyView({ date }: { date?: string }) {
   const { go, toast } = useApp();
@@ -47,72 +52,82 @@ export function WeeklyView({ date }: { date?: string }) {
     }
   };
 
-  const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
+  const s = parseYmd(start), en = parseYmd(addDays(start, 6));
   const tdy = today();
 
-  const day = (d: string) => {
-    const dt = parseYmd(d);
-    const e = entries.find((x) => x.entry_date === d);
-    const list = todos.filter((t) => t.due_at && localYmdOf(t.due_at) === d);
-    return (
-      <div key={d} className={`week-day ${d === tdy ? "is-today" : ""}`}>
-        <button className="week-label" onClick={() => go({ name: "diary", date: d })} aria-label={`${d} 일기 열기`}>
-          <b>{WEEKDAYS[dt.getDay()]}</b>
-          <span>{dt.getMonth() + 1}/{dt.getDate()}</span>
-        </button>
-        <div className="week-body">
-          {e && (
-            <button className="week-entry" onClick={() => go({ name: "diary", date: d })}>
-              <span className="mini-mood">{e.mood ? <MoodFace mood={e.mood} /> : "♥"}</span>
-              {e.title || "일기 있음"}
-            </button>
-          )}
-          {list.slice(0, 3).map((t) => (
-            <label key={t.id} className={`week-todo ${t.is_completed ? "done" : ""}`}>
-              <input type="checkbox" checked={t.is_completed} onChange={() => toggle(t)} />
-              <span>{hhmm(t.due_at!)} {t.title}</span>
-            </label>
-          ))}
-          {list.length > 3 && (
-            <button className="link small" onClick={() => go({ name: "todo", date: d })}>+{list.length - 3}개 더</button>
-          )}
-          {!e && !list.length && (
-            <button className="link small faint" onClick={() => go({ name: "todo", date: d })}>+ 할 일</button>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  const s = parseYmd(start), en = parseYmd(addDays(start, 6));
-  const nav = (
-    <div className="date-nav">
-      <button className="icon-btn" onClick={() => setStart(addDays(start, -7))} aria-label="지난주">‹</button>
-      <h2 className="hand">{s.getMonth() + 1}/{s.getDate()} – {en.getMonth() + 1}/{en.getDate()}</h2>
-      <button className="icon-btn" onClick={() => setStart(addDays(start, 7))} aria-label="다음주">›</button>
-    </div>
+  const content = (
+    <>
+      <At x={0.236} y={0.151} w={0.07} h={0.035} className="fill-in hand center">
+        {s.getMonth() + 1}/{s.getDate()}
+      </At>
+      <At x={0.338} y={0.151} w={0.07} h={0.035} className="fill-in hand center">
+        {en.getMonth() + 1}/{en.getDate()}
+      </At>
+      {error && <At x={0.26} y={0.2} w={0.6} className="error small">{error}</At>}
+      {Array.from({ length: 7 }, (_, i) => {
+        const d = addDays(start, i);
+        const top = BOX0 + i * BOX_STEP;
+        const e = entries.find((x) => x.entry_date === d);
+        const list = todos.filter((t) => t.due_at && localYmdOf(t.due_at) === d);
+        return (
+          <div key={d}>
+            <At x={0.114} y={top + 0.055} w={0.113} h={0.025} className={`week-date ${d === tdy ? "is-today" : ""}`}>
+              <button className="link small" onClick={() => go({ name: "diary", date: d })} aria-label={`${d} 일기 열기`}>
+                {parseYmd(d).getDate()}일{e?.mood ? "" : e ? " ♥" : ""}
+              </button>
+              {e?.mood && (
+                <span className="mini-mood">
+                  <MoodFace mood={e.mood} />
+                </span>
+              )}
+            </At>
+            <At x={0.262} y={top + 0.008} w={0.59} h={0.072} className="week-lines">
+              {loading ? null : (
+                <>
+                  {e && (
+                    <button className="week-entry" onClick={() => go({ name: "diary", date: d })}>
+                      ♡ {e.title || "일기 있음"}
+                    </button>
+                  )}
+                  {list.slice(0, e ? 2 : 3).map((t) => (
+                    <label key={t.id} className={`week-todo ${t.is_completed ? "done" : ""}`}>
+                      <input type="checkbox" checked={t.is_completed} onChange={() => toggle(t)} />
+                      <span>
+                        {hhmm(t.due_at!)} {t.title}
+                      </span>
+                    </label>
+                  ))}
+                  {list.length > (e ? 2 : 3) && (
+                    <button className="link small" onClick={() => go({ name: "todo", date: d })}>
+                      +{list.length - (e ? 2 : 3)}개 더
+                    </button>
+                  )}
+                </>
+              )}
+            </At>
+            <At x={0.86} y={top + 0.01} w={0.05} h={0.03}>
+              <button className="icon-btn sm" onClick={() => go({ name: "todo", date: d })} aria-label={`${d} 할 일 열기`}>
+                +
+              </button>
+            </At>
+          </div>
+        );
+      })}
+    </>
   );
 
-  const body = (list: string[]) =>
-    loading ? <p className="muted center">불러오는 중…</p> : error ? <p className="error center">{error}</p> : <div className="week-list">{list.map(day)}</div>;
-
   return (
-    <Sheet
+    <Paper
+      label="Weekly Planner"
       template="07_weekly"
-      left={
-        <div>
-          {nav}
-          {body(days.slice(0, 4))}
-        </div>
-      }
-      right={
-        <div>
-          <h2 className="hand center">Weekly ♡ {entries.length}일 기록 · 할 일 {todos.filter((t) => t.is_completed).length}/{todos.length}</h2>
-          {body(days.slice(4))}
-          <div className="center">
-            <button className="btn-ghost" onClick={() => setStart(weekStart(today()))}>이번 주로</button>
-          </div>
-        </div>
+      decorKey={`weekly:${start}`}
+      content={content}
+      pinned={
+        <At x={0.44} y={0.158} className="paper-nav">
+          <button className="icon-btn sm" onClick={() => setStart(addDays(start, -7))} aria-label="지난주">‹</button>
+          <button className="icon-btn sm" onClick={() => setStart(weekStart(today()))} aria-label="이번 주로">•</button>
+          <button className="icon-btn sm" onClick={() => setStart(addDays(start, 7))} aria-label="다음주">›</button>
+        </At>
       }
     />
   );

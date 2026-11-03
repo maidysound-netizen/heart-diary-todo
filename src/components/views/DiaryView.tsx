@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Sheet, useApp } from "../DiaryApp";
-import { DrawingBoard } from "../DrawingBoard";
+import { useApp } from "../DiaryApp";
+import { At, Paper } from "../Paper";
 import { MOODS, MoodFace } from "../art";
-import { addDays, api, prettyDate, today, uid, type Entry, type PageItem, type Stroke } from "@/lib/client";
+import { addDays, api, pad, parseYmd, prettyDate, today, uid, type Entry, type PageItem, type Stroke } from "@/lib/client";
 import catalog from "@/lib/templates.json";
 
 type Draft = { title: string; content_text: string; mood: string; template_key: string; strokes: Stroke[]; items: PageItem[] };
@@ -16,7 +16,7 @@ function toDraft(e: Entry | null): Draft {
   const items = [...(e.page_layout?.items ?? [])];
   // 예전 일기(본문이 따로 있던 것)는 본문을 페이지 위 글상자로 옮겨 보여준다
   if (e.content_text && !items.some((i) => i.kind === "text")) {
-    items.push({ id: uid(), kind: "text", text: e.content_text, color: "#5B3A45", x: 0.16, y: 0.3, w: 0.42, h: 0.3, rot: 0, z: 301 });
+    items.push({ id: uid(), kind: "text", text: e.content_text, color: "#5B3A45", x: 0.12, y: 0.32, w: 0.76, h: 0.3, rot: 0, z: 301 });
   }
   return {
     title: e.title,
@@ -37,8 +37,8 @@ const textOf = (items: PageItem[]) =>
     .join("\n");
 
 export function DiaryView({ date: initDate, tool }: { date?: string; tool?: "draw" | "photo" }) {
-  const { go, toast, setLeaveGuard } = useApp();
-  const [date] = useState(initDate ?? today());
+  const { toast, setLeaveGuard } = useApp();
+  const [date, setDate] = useState(initDate ?? today());
   const [entry, setEntry] = useState<Entry | null>(null);
   const [draft, setDraft] = useState<Draft>(EMPTY);
   const [loading, setLoading] = useState(true);
@@ -150,14 +150,43 @@ export function DiaryView({ date: initDate, tool }: { date?: string; tool?: "dra
     error: "저장 실패 — 다시 시도해 주세요",
   }[status];
 
-  const header = (
+  // 다른 날로 넘길 때도 먼저 저장
+  const changeDate = async (d: string) => {
+    if ((statusRef.current === "dirty" || statusRef.current === "error") && !(await save())) {
+      if (!confirm("저장하지 못했어요. 저장하지 않고 넘길까요?")) return;
+    }
+    setDate(d);
+  };
+
+  const dt = parseYmd(date);
+  // 05_daily.png 칸: DATE 줄, MOOD 하트 줄, TODAY'S LITTLE MOMENTS 옆에 제목
+  const pinned = (
     <>
-      <div className="lobe lobe-l">
-        <div className="date-nav">
-          <button className="icon-btn" onClick={() => go({ name: "diary", date: addDays(date, -1) })} aria-label="전날">‹</button>
-          <h2 className="hand">{prettyDate(date)}</h2>
-          <button className="icon-btn" onClick={() => go({ name: "diary", date: addDays(date, 1) })} aria-label="다음날">›</button>
-        </div>
+      <At x={0.195} y={0.158} w={0.24} h={0.036} className="fill-in hand">
+        {dt.getFullYear()} . {pad(dt.getMonth() + 1)} . {pad(dt.getDate())}
+      </At>
+      <At x={0.44} y={0.168} className="paper-nav">
+        <button className="icon-btn sm" onClick={() => changeDate(addDays(date, -1))} aria-label="전날">‹</button>
+        <button className="icon-btn sm" onClick={() => changeDate(today())} aria-label="오늘로">•</button>
+        <button className="icon-btn sm" onClick={() => changeDate(addDays(date, 1))} aria-label="다음날">›</button>
+      </At>
+      <At x={0.262} y={0.214} w={0.45} h={0.05} className="mood-row paper-moods">
+        {MOODS.map((m) => (
+          <button
+            key={m.key}
+            role="radio"
+            aria-checked={draft.mood === m.key}
+            className={`mood ${draft.mood === m.key ? "on" : ""}`}
+            onClick={() => patch({ mood: draft.mood === m.key ? "" : m.key })}
+            title={m.label}
+            disabled={loading || !!loadError}
+          >
+            <MoodFace mood={m.key} />
+            <span className="sr">{m.label}</span>
+          </button>
+        ))}
+      </At>
+      <At x={0.45} y={0.277} w={0.43} h={0.036}>
         <input
           className="title-input hand"
           value={draft.title}
@@ -167,113 +196,69 @@ export function DiaryView({ date: initDate, tool }: { date?: string; tool?: "dra
           aria-label="제목"
           disabled={loading || !!loadError}
         />
+      </At>
+    </>
+  );
+
+  const content = loadError ? (
+    <At x={0.12} y={0.4} w={0.76} className="center">
+      <p className="error">{loadError}</p>
+      <button className="btn-ghost" onClick={load}>다시 시도</button>
+    </At>
+  ) : (
+    !loading &&
+    !draft.items.length &&
+    !draft.strokes.length && (
+      <At x={0.12} y={0.42} w={0.76} className="board-hint hand">
+        T로 줄 위 아무 곳이나 눌러 글을 쓰고, ✎로 그 위에 그림을 그려요
+      </At>
+    )
+  );
+
+  const footer = (
+    <>
+      <div className="tpl-row" role="radiogroup" aria-label="속지 선택">
+        {catalog.templates.map((t) => (
+          <button
+            key={t.id}
+            role="radio"
+            aria-checked={draft.template_key === t.id}
+            className={`tpl ${draft.template_key === t.id ? "on" : ""}`}
+            onClick={() => patch({ template_key: t.id })}
+            title={t.label}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={`/templates/${t.id}_thumb.webp`} alt="" />
+            <span>{t.label}</span>
+          </button>
+        ))}
       </div>
-      <div className="lobe lobe-r">
-        <div className="mood-row" role="radiogroup" aria-label="오늘의 기분">
-          {MOODS.map((m) => (
-            <button
-              key={m.key}
-              role="radio"
-              aria-checked={draft.mood === m.key}
-              className={`mood ${draft.mood === m.key ? "on" : ""}`}
-              onClick={() => patch({ mood: draft.mood === m.key ? "" : m.key })}
-              title={m.label}
-            >
-              <MoodFace mood={m.key} />
-              <span className="sr">{m.label}</span>
-            </button>
-          ))}
-        </div>
+      <div className="foot-actions">
+        <button className="btn-primary" onClick={() => void save()} disabled={loading || !!loadError || status === "saving"}>
+          저장
+        </button>
+        {entry && (
+          <button className="btn-ghost danger" onClick={remove}>
+            삭제
+          </button>
+        )}
+        <span className={`save-state s-${status || "idle"}`} role="status">
+          {statusText}
+        </span>
       </div>
     </>
   );
 
-  if (loading || loadError) {
-    return (
-      <Sheet
-        template={draft.template_key}
-        full={
-          <>
-            {header}
-            <div className="sheet-center">
-              {loadError ? (
-                <>
-                  <p className="error">{loadError}</p>
-                  <button className="btn-ghost" onClick={load}>다시 시도</button>
-                </>
-              ) : (
-                <p className="muted">펼치는 중…</p>
-              )}
-            </div>
-          </>
-        }
-      />
-    );
-  }
-
   return (
-    <DrawingBoard
-      key={boardKey}
-      fill
-      strokes={draft.strokes}
-      items={draft.items}
-      onChange={onBoard}
-      initialTool={tool === "photo" ? "select" : tool === "draw" ? "pen" : "text"}
+    <Paper
+      label={`${prettyDate(date)} 일기`}
+      template={draft.template_key}
+      content={content}
+      pinned={pinned}
+      footer={footer}
+      board={loading || loadError ? undefined : { strokes: draft.strokes, items: draft.items, onChange: onBoard, key: `${date}-${boardKey}` }}
+      defaultTool={tool === "photo" ? "select" : tool === "draw" ? "pen" : "text"}
       autoPhoto={tool === "photo"}
-    >
-      {({ toolbar, board, selTools }) => (
-        <Sheet
-          template={draft.template_key}
-          full={
-            <>
-              {board}
-              {header}
-              {!draft.items.length && !draft.strokes.length && (
-                <p className="board-hint hand" aria-hidden="true">
-                  T를 누르고 아무 곳이나 눌러 글을 쓰고, ✎로 그 위에 그림을 그려요
-                </p>
-              )}
-            </>
-          }
-          below={
-            <div className="diary-below">
-              {toolbar}
-              <div className="diary-below-row">
-                <div className="tpl-row" role="radiogroup" aria-label="속지 선택">
-                  {catalog.templates.map((t) => (
-                    <button
-                      key={t.id}
-                      role="radio"
-                      aria-checked={draft.template_key === t.id}
-                      className={`tpl ${draft.template_key === t.id ? "on" : ""}`}
-                      onClick={() => patch({ template_key: t.id })}
-                      title={t.label}
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={`/templates/${t.id}_thumb.webp`} alt="" />
-                      <span>{t.label}</span>
-                    </button>
-                  ))}
-                </div>
-                {selTools}
-                <div className="foot-actions">
-                  <button className="btn-primary" onClick={() => void save()} disabled={status === "saving"}>
-                    저장
-                  </button>
-                  {entry && (
-                    <button className="btn-ghost danger" onClick={remove}>
-                      삭제
-                    </button>
-                  )}
-                  <span className={`save-state s-${status || "idle"}`} role="status">
-                    {statusText}
-                  </span>
-                </div>
-              </div>
-            </div>
-          }
-        />
-      )}
-    </DrawingBoard>
+    />
   );
 }

@@ -51,6 +51,10 @@ export const useApp = () => useContext(AppCtx)!;
 
 const SheetCtx = createContext<Rect | null>(null);
 
+/** 속지가 튀어나오기 시작할 화면 좌표 (방금 누른 스티커 자리) */
+const OriginCtx = createContext<{ x: number; y: number } | null>(null);
+export const usePaperOrigin = () => useContext(OriginCtx);
+
 /**
  * 펼친 하트 한 장. 3D 내지 위에 정확히 겹치고 SVG clipPath로 하트 윤곽을 유지한다.
  * - full: 하트 전체를 덮는 층 (스티커 판, 그림+글 보드)
@@ -96,17 +100,8 @@ export function Sheet({ template, full, left, right, extras, below }: {
   );
 }
 
-/** 하트 아래 공간(px): 화면마다 하트 아래에 놓을 트레이·도구 높이 */
-const BOTTOM: Record<View["name"] | "closed", number> = {
-  closed: 130,
-  hub: 200,
-  diary: 132,
-  todo: 40,
-  weekly: 40,
-  monthly: 40,
-  music: 40,
-  decorate: 40,
-};
+/** 하트 아래 공간(px): 닫힘 = 열기 버튼, 열림 = 그리기 도구 + 스티커 시트 */
+const BOTTOM = { closed: 130, open: 250 };
 
 function webglAvailable() {
   try {
@@ -147,8 +142,6 @@ function useFallbackRect(active: boolean, insets: Insets) {
   return rect;
 }
 
-const DEPTH: Record<View["name"], number> = { hub: 0, diary: 1, todo: 1, weekly: 1, monthly: 1, music: 1, decorate: 1 };
-
 export default function DiaryApp({
   user,
   devLogin,
@@ -170,7 +163,8 @@ export default function DiaryApp({
   const [gl, setGl] = useState<boolean | null>(null);
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<View>({ name: "hub" });
-  const [layoutFor, setLayoutFor] = useState<View["name"]>("hub");
+  const [origin, setOrigin] = useState<{ x: number; y: number } | null>(null);
+  const lastPointer = useRef<{ x: number; y: number } | null>(null);
   const [rect3d, setRect3d] = useState<Rect | null>(null);
   const [hidden, setHidden] = useState(false);
   const [flip, setFlip] = useState<{ id: number; dir: 1 | -1 } | null>(null);
@@ -185,6 +179,12 @@ export default function DiaryApp({
   const saveHubTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => setGl(webglAvailable()), []);
+
+  useEffect(() => {
+    const f = (e: PointerEvent) => (lastPointer.current = { x: e.clientX, y: e.clientY });
+    window.addEventListener("pointerdown", f, true);
+    return () => window.removeEventListener("pointerdown", f, true);
+  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -218,14 +218,13 @@ export default function DiaryApp({
 
   /** 레이어를 잠시 숨기고 3D 책장을 넘긴 뒤 apply()로 다음 화면을 보여준다 */
   const turn = useCallback(
-    async (dir: 1 | -1, nextLayout: View["name"], apply: () => void) => {
+    async (dir: 1 | -1, apply: () => void) => {
       if (busy.current) return;
       busy.current = true;
       try {
         if (guard.current && !(await guard.current())) return;
         guard.current = null;
         setHidden(true);
-        setLayoutFor(nextLayout);
         setFlip({ id: Date.now(), dir });
         await new Promise((r) => setTimeout(r, flipMs + 40));
         apply();
@@ -237,17 +236,23 @@ export default function DiaryApp({
     [flipMs],
   );
 
-  const go = useCallback(
-    (next: View) => {
-      const dir: 1 | -1 = DEPTH[next.name] >= DEPTH[view.name] ? 1 : -1;
-      void turn(dir, next.name, () => setView(next));
-    },
-    [view.name, turn],
-  );
+  /** 스티커를 누르면 그 자리에서 속지가 튀어나온다 (허브로 돌아가면 속지가 다시 들어간다) */
+  const go = useCallback(async (next: View) => {
+    if (busy.current) return;
+    busy.current = true;
+    try {
+      if (guard.current && !(await guard.current())) return;
+      guard.current = null;
+      setOrigin(lastPointer.current);
+      setView(next);
+    } finally {
+      busy.current = false;
+    }
+  }, []);
 
   const turnHub = useCallback(
     (to: number) => {
-      void turn(to > hubPage ? 1 : -1, "hub", () => setHubPage(to));
+      void turn(to > hubPage ? 1 : -1, () => setHubPage(to));
     },
     [hubPage, turn],
   );
@@ -257,10 +262,7 @@ export default function DiaryApp({
     guard.current = null;
     setChatOpen(false);
     setOpen(false);
-    setTimeout(() => {
-      setView({ name: "hub" });
-      setLayoutFor("hub");
-    }, 400);
+    setTimeout(() => setView({ name: "hub" }), 400);
   }, []);
 
   const openBook = () => {
@@ -271,7 +273,7 @@ export default function DiaryApp({
     setOpen(true);
   };
 
-  const insets: Insets = useMemo(() => ({ top: 60, bottom: BOTTOM[open ? layoutFor : "closed"] }), [open, layoutFor]);
+  const insets: Insets = useMemo(() => ({ top: 60, bottom: open ? BOTTOM.open : BOTTOM.closed }), [open]);
   const onRect = useCallback((r: Rect | null) => setRect3d(r), []);
 
   const ctx = useMemo<Ctx | null>(
@@ -284,7 +286,7 @@ export default function DiaryApp({
         setHub,
         hubPage: Math.min(hubPage, hub.pages.length - 1),
         turnHub,
-        go,
+        go: (v) => void go(v),
         closeBook,
         openChat: () => setChatOpen(true),
         toast,
@@ -366,9 +368,12 @@ export default function DiaryApp({
         {ctx && (
           <AppCtx.Provider value={ctx}>
             <SheetCtx.Provider value={rect}>
-              <div className={`pages ${showPages ? "show" : ""} ${fallback ? "flat" : ""}`} aria-hidden={!showPages}>
-                {showPages && <CurrentView view={view} />}
-              </div>
+              <OriginCtx.Provider value={origin}>
+                <div className={`pages ${showPages ? "show" : ""} ${fallback ? "flat" : ""}`} aria-hidden={!showPages}>
+                  {showPages && <HubView inert={view.name !== "hub"} />}
+                </div>
+                {open && view.name !== "hub" && <CurrentView view={view} />}
+              </OriginCtx.Provider>
             </SheetCtx.Provider>
             {open && (
               <button className="mascot-btn" onClick={() => setChatOpen((v) => !v)} aria-label="마스코트 모모와 대화하기">
@@ -413,7 +418,7 @@ export default function DiaryApp({
 function CurrentView({ view }: { view: View }) {
   switch (view.name) {
     case "hub":
-      return <HubView />;
+      return null;
     case "diary":
       return <DiaryView key={`${view.date}-${view.tool}`} date={view.date} tool={view.tool} />;
     case "todo":

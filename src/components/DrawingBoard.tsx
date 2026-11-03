@@ -4,7 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNo
 import { STICKERS, Sticker } from "./art";
 import { api, ApiError, uid, type PageItem, type Stroke } from "@/lib/client";
 
-type Tool = "pen" | "hl" | "eraser" | "text" | "select";
+export type Tool = "hand" | "pen" | "hl" | "eraser" | "text" | "select";
 /** 보드 좌표는 0~1 정규화. 하트 페이지 전체를 덮을 때는 하트 바운딩 박스 기준이라 기기와 상관없이 같은 자리 */
 const DEFAULT_ASPECT = 1.6;
 
@@ -96,6 +96,7 @@ export function DrawingBoard({
   autoPhoto,
   onBusy,
   fill,
+  handTool,
   children,
 }: {
   strokes: Stroke[];
@@ -106,6 +107,8 @@ export function DrawingBoard({
   onBusy?: (busy: boolean) => void;
   /** 부모(하트 페이지)를 꽉 채운다. 없으면 가로:세로 1.6 */
   fill?: boolean;
+  /** "손" 도구: 보드를 투명하게 비켜 아래 속지의 기능(체크박스·입력)을 쓸 수 있게 한다 */
+  handTool?: boolean;
   /** 도구 모음과 보드를 서로 다른 곳(하트 아래 / 하트 안)에 놓을 때 */
   children?: (parts: { toolbar: ReactNode; board: ReactNode; selTools: ReactNode }) => ReactNode;
 }) {
@@ -204,7 +207,7 @@ export function DrawingBoard({
       e.preventDefault(); // 보드가 포커스를 가져가 새 글상자가 바로 닫히지 않도록
       if (editing) return setEditing(null);
       const [x, y] = toLocal(e);
-      const it = addItem({ kind: "text", text: "", color, x: Math.min(x, 0.8), y: Math.max(0, y - 0.02), w: 0.3, h: 0.09 }, true);
+      const it = addItem({ kind: "text", text: "", color, x: Math.min(x, 0.8), y: Math.max(0, y - 0.02), w: Math.max(0.15, Math.min(0.6, 0.95 - x)), h: 0.07 }, true);
       setEditing(it.id);
       return;
     }
@@ -409,6 +412,7 @@ export function DrawingBoard({
       <div className="board-tools" role="toolbar" aria-label="그리기 도구">
         {(
           [
+            ...(handTool ? ([["hand", "손 — 속지 칸 쓰기", "✋"]] as const) : []),
             ["pen", "펜", "✎"],
             ["hl", "형광펜", "▍"],
             ["eraser", "지우개", "⌫"],
@@ -461,6 +465,7 @@ export function DrawingBoard({
       <div
         ref={boxRef}
         className={`board tool-${tool} ${fill ? "fill" : ""}`}
+        data-hand={tool === "hand" || undefined}
         style={fill ? undefined : { aspectRatio: String(DEFAULT_ASPECT) }}
         tabIndex={0}
         aria-label="그림·스티커·사진을 놓는 페이지"
@@ -468,6 +473,7 @@ export function DrawingBoard({
         <canvas
           ref={cvRef}
           className="board-canvas"
+          style={tool === "hand" ? { pointerEvents: "none" } : undefined}
           onPointerDown={onDown}
           onPointerMove={onMove}
           onPointerUp={onUp}

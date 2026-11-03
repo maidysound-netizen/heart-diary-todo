@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Sheet, useApp } from "../DiaryApp";
+import { useApp } from "../DiaryApp";
+import { At, Paper } from "../Paper";
 import { api, type MusicLink } from "@/lib/client";
 
 /** 알려진 음악 서비스 링크를 공식 임베드 플레이어 주소로 바꾼다. 모르는 주소는 링크로만 보여준다 */
@@ -89,10 +90,13 @@ export function MusicView() {
   const embed = cur && embedUrl(cur.url);
 
   return (
-    <Sheet
-      template="01_blank"
-      left={
-        <div className="music">
+    <Paper
+      label="Music"
+      template="04_dots"
+      decorKey="music"
+      content={
+        <>
+        <At x={0.1} y={0.17} w={0.8} h={0.36} className="music paper-panel">
           <h2 className="hand">♪ Music</h2>
           <form className="todo-form" onSubmit={add}>
             <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="YouTube · Spotify · SoundCloud 링크" aria-label="음악 링크" type="url" required maxLength={500} />
@@ -117,10 +121,8 @@ export function MusicView() {
           ) : (
             <p className="empty hand">좋아하는 노래 링크를 붙여 보세요</p>
           )}
-        </div>
-      }
-      right={
-        <div className="music">
+        </At>
+        <At x={0.1} y={0.55} w={0.8} h={0.36} className="music paper-panel">
           {cur ? (
             <>
               <h3 className="hand">{cur.title || "지금 듣는 노래"}</h3>
@@ -143,7 +145,8 @@ export function MusicView() {
           ) : (
             <p className="empty hand">왼쪽에서 노래를 골라요</p>
           )}
-        </div>
+        </At>
+        </>
       }
     />
   );

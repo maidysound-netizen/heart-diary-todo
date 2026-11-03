@@ -58,4 +58,12 @@ CREATE TABLE IF NOT EXISTS music_links (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS music_owner ON music_links (owner_id, created_at);
+CREATE TABLE IF NOT EXISTS page_decor (
+  owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  page_key VARCHAR(60) NOT NULL,
+  drawing_data JSONB,
+  page_layout JSONB,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (owner_id, page_key)
+);
 `;

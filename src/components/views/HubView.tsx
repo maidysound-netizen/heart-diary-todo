@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { Sheet, useApp } from "../DiaryApp";
 import { FeatureIcon } from "../art";
 import { FEATURES, FEATURE_ORDER } from "../features";
+import { DrawingBoard } from "../DrawingBoard";
+import { useDecor } from "../Paper";
 import { insideHeart } from "@/lib/heart";
 import { uid, type HubSticker } from "@/lib/client";
 
@@ -23,11 +25,15 @@ function StickerFace({ kind }: { kind: string }) {
   );
 }
 
-/** 첫 펼침: 하트 위에 붙인 기능 스티커 + 아래 스티커 트레이 + 다음 장 */
-export function HubView() {
+/**
+ * 첫 펼침 = 기본 화면: 하트 한 장이 스티커 판이자 그리기 판.
+ * ✋ 손 도구로 기능 스티커를 붙이고 누르고, ✎·T로 그 위에 낙서·글을 쓴다. 장마다 따로 저장된다.
+ */
+export function HubView({ inert }: { inert?: boolean }) {
   const { hub, setHub, hubPage, turnHub, go, openChat, toast } = useApp();
   const boardRef = useRef<HTMLDivElement>(null);
   const page = hub.pages[hubPage];
+  const decor = useDecor(`hub:${page.id.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 16) || "p1"}`, false);
   const [dragPos, setDragPos] = useState<{ id: string; x: number; y: number } | null>(null);
   const [ghost, setGhost] = useState<{ kind: string; x: number; y: number } | null>(null);
   const press = useRef<{ id?: string; kind?: string; sx: number; sy: number; moved: boolean } | null>(null);
@@ -134,10 +140,15 @@ export function HubView() {
     turnHub(hubPage - 1);
   };
 
+  if (!decor.data) return null;
+
   return (
-    <>
+    <DrawingBoard key={page.id} fill handTool strokes={decor.data.strokes} items={decor.data.items} onChange={decor.onChange} initialTool="hand">
+      {({ toolbar, board, selTools }) => (
+    <div className={inert ? "hub-inert" : undefined} inert={inert || undefined}>
       <Sheet
         full={
+          <>
           <div ref={boardRef} className="hub-board">
             {!page.stickers.length && (
               <p className="hub-empty hand">
@@ -182,6 +193,8 @@ export function HubView() {
               );
             })}
           </div>
+          <div className="hub-draw">{board}</div>
+          </>
         }
         extras={
           <>
@@ -197,9 +210,14 @@ export function HubView() {
         }
         below={
           <div className="tray-wrap">
+            <div className="hub-tools">
+              {toolbar}
+              {selTools}
+              <span className="save-state">{{ "": "", saving: "저장 중…", saved: "낙서 저장됨 ♡", error: "저장 실패" }[decor.state]}</span>
+            </div>
             <div className="tray-head">
               <span className="hand">스티커 시트</span>
-              <span className="muted small">하트 위로 끌어다 붙이고, 붙인 스티커를 누르면 그 페이지로 넘어가요</span>
+              <span className="muted small">✋ 손으로 하트 위에 끌어다 붙이고 누르면 속지가 나와요 · ✎ T로 그 위에 낙서해요</span>
               <span className="page-no">
                 {hubPage + 1} / {hub.pages.length}
                 {hubPage > 0 && !page.stickers.length && (
@@ -240,6 +258,8 @@ export function HubView() {
           </div>
         </div>
       )}
-    </>
+    </div>
+      )}
+    </DrawingBoard>
   );
 }

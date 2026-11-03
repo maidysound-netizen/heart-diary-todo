@@ -1464,3 +1464,424 @@ button:disabled {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ───── 허브 = 스티커 판 + 그리기 판 ───── */
+.hub-draw {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+}
+.board[data-hand] {
+  pointer-events: none;
+}
+.hub-board {
+  z-index: 2;
+}
+.hub-inert {
+  pointer-events: none;
+  filter: saturate(0.85);
+}
+.hub-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding-bottom: 6px;
+  margin-bottom: 6px;
+  border-bottom: 1px dashed #f0c2cf;
+}
+.hub-tools .board-tools {
+  margin: 0;
+}
+.hub-tools .sticker-pop,
+.paper-tools .sticker-pop {
+  top: auto;
+  bottom: 2.4em;
+}
+
+/* ───── 스티커를 누르면 튀어나오는 속지 ───── */
+.paper-layer {
+  position: fixed;
+  inset: 56px 0 0;
+  z-index: 15;
+}
+.paper-backdrop {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 45%, #fff3f633, #a94c6840);
+  backdrop-filter: blur(2px);
+  animation: fadeIn 0.3s ease-out;
+}
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+}
+.paper-stage {
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding-top: 6px;
+  gap: 8px;
+  pointer-events: none;
+}
+.paper {
+  position: relative;
+  pointer-events: auto;
+  border-radius: 2.6% / 1.9%;
+  box-shadow: 0 2px 0 #fff, 0 18px 50px #a94c6855, 0 4px 12px #0002;
+  font-size: calc(var(--pw) * 2.55);
+  line-height: 1.35;
+  animation: paperPop 0.62s cubic-bezier(0.2, 1.25, 0.35, 1) both;
+  transform-origin: 50% 60%;
+}
+.paper.closing {
+  animation: paperBack 0.26s ease-in forwards;
+}
+@keyframes paperPop {
+  0% {
+    transform: translate(var(--fx), var(--fy)) scale(0.12) rotate(-14deg);
+    opacity: 0.3;
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    transform: none;
+  }
+}
+@keyframes paperBack {
+  to {
+    transform: translate(0, 40%) scale(0.3) rotate(8deg);
+    opacity: 0;
+  }
+}
+.paper-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  user-select: none;
+  pointer-events: none;
+}
+.paper-content,
+.paper-board,
+.paper-pinned {
+  position: absolute;
+  inset: 0;
+}
+.paper-content {
+  z-index: 1;
+}
+.paper-board {
+  z-index: 2;
+  border-radius: inherit;
+  overflow: hidden;
+}
+.paper-pinned {
+  z-index: 3;
+  pointer-events: none;
+}
+.paper-pinned > * {
+  pointer-events: auto;
+}
+.paper-close {
+  position: absolute;
+  z-index: 4;
+  top: -10px;
+  right: -10px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 3px solid #fff;
+  background: var(--cherry);
+  color: #fff;
+  font-size: 18px;
+  line-height: 1;
+  box-shadow: 0 4px 10px #a94c6866;
+}
+.paper-loading {
+  position: absolute;
+  top: 45%;
+  left: 0;
+  right: 0;
+  text-align: center;
+}
+.paper-tools {
+  pointer-events: auto;
+  max-width: calc(100vw - 16px);
+  background: #fffaf5f2;
+  border: 2px dashed #f0c2cf;
+  border-radius: 18px;
+  padding: 6px 10px;
+  box-shadow: 0 8px 24px #a94c6822;
+  font-size: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  animation: fadeIn 0.4s ease-out;
+}
+.paper-tools .board-tools {
+  margin: 0;
+}
+.paper-tools-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+.paper-tools-row:empty {
+  display: none;
+}
+.paper-tools .tpl-row {
+  margin: 0;
+}
+.paper-tools .save-state {
+  width: auto;
+}
+
+/* 속지 칸 위에 놓는 것들 */
+.at {
+  position: absolute;
+  min-width: 0;
+}
+.fill-in {
+  color: #6b3a4c;
+  display: flex;
+  align-items: flex-end;
+  font-size: 1.15em;
+  white-space: nowrap;
+}
+.fill-in.center {
+  justify-content: center;
+}
+.fill-in.small {
+  font-size: 0.85em;
+  align-items: center;
+}
+.ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+}
+.paper-nav {
+  display: flex;
+  gap: 4px;
+}
+.paper-nav .icon-btn {
+  background: #fffdfbee;
+}
+.paper-check {
+  width: 100%;
+  height: 100%;
+  border: none;
+  border-radius: 25%;
+  background: transparent;
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+.paper-check:hover {
+  background: #f4a7be33;
+}
+.paper-check.on::after {
+  content: "✓";
+  color: var(--cherry);
+  font-weight: 800;
+  font-size: 1.3em;
+  line-height: 1;
+}
+.todo-line {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.4em;
+}
+.line-title {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  border: none;
+  background: none;
+  padding: 0;
+  font-family: var(--font-hand), var(--font-body);
+  font-size: 1.2em;
+  color: var(--ink);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.todo-line.done .line-title {
+  text-decoration: line-through;
+  color: var(--ink-2);
+}
+.line-meta {
+  font-size: 0.8em;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.todo-line.over .line-meta {
+  color: var(--danger);
+}
+.line-x {
+  border: none;
+  background: none;
+  color: var(--ink-2);
+  opacity: 0;
+  padding: 0 0.2em;
+}
+.todo-line:hover .line-x,
+.line-x:focus-visible {
+  opacity: 1;
+}
+.line-edit {
+  display: flex;
+  flex: 1;
+  gap: 0.4em;
+  align-items: flex-end;
+}
+.line-edit input {
+  border: none;
+  border-bottom: 1.5px dashed var(--rose);
+  background: transparent;
+  padding: 0 0.2em;
+  min-width: 0;
+  font-size: 1em;
+}
+.line-edit input:not([type="time"]) {
+  flex: 1;
+  font-family: var(--font-hand), var(--font-body);
+  font-size: 1.2em;
+}
+.line-edit input[type="time"] {
+  width: 6.5em;
+  font-size: 0.8em;
+}
+.todo-line.add input::placeholder {
+  color: #c89aa8;
+}
+.week-date {
+  text-align: center;
+  font-size: 0.8em;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.2em;
+}
+.week-date.is-today .link {
+  background: var(--rose);
+  color: #fff;
+  border-radius: 999px;
+  padding: 0 0.5em;
+  text-decoration: none;
+}
+.week-lines {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-evenly;
+  font-size: 0.85em;
+  overflow: hidden;
+}
+.week-lines .week-entry,
+.week-lines .week-todo {
+  font-size: 1em;
+}
+.cal-cell {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: transparent;
+  padding: 0.2em 0.3em;
+  text-align: left;
+  font-size: 0.9em;
+}
+.cal-cell:hover {
+  background: #f4a7be22;
+}
+.cal-cell.sel {
+  background: #f4a7be33;
+  box-shadow: inset 0 0 0 2px var(--cherry);
+}
+.cal-cell.sun .cal-n {
+  color: var(--danger);
+}
+.cal-cell.sat .cal-n {
+  color: #5a7fc0;
+}
+.cal-cell.is-today .cal-n {
+  background: var(--rose);
+  color: #fff;
+  border-radius: 999px;
+  padding: 0 0.35em;
+}
+.cal-cell .cal-mood {
+  width: 1.5em;
+  height: 1.5em;
+  right: 0.2em;
+  top: 0.2em;
+}
+.note-line {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.8em;
+  font-size: 0.85em;
+  color: var(--ink);
+}
+.paper-moods {
+  display: flex;
+  gap: 0.2em;
+  align-items: center;
+  justify-content: flex-start;
+  margin: 0;
+}
+.paper-moods .mood {
+  width: auto;
+  height: 100%;
+  aspect-ratio: 1;
+}
+.paper .title-input {
+  font-size: 1.1em;
+  padding: 0 0.2em;
+}
+.paper .board-hint {
+  position: absolute;
+  text-align: center;
+  color: var(--ink-2);
+  opacity: 0.8;
+  pointer-events: none;
+}
+.paper-panel {
+  overflow: auto;
+  padding: 0.2em 0.4em;
+}
+.paper-panel input:not([type="checkbox"]) {
+  width: 100%;
+  border: 1.5px solid var(--line);
+  border-radius: 0.6em;
+  background: #fffdfa;
+  padding: 0.3em 0.6em;
+}
+/* 그리기 층 래퍼는 클릭을 막지 않고, 손 도구가 아닐 때만 보드가 입력을 받는다 */
+.hub-draw,
+.paper-board {
+  pointer-events: none;
+}
+.hub-draw .board:not([data-hand]),
+.paper-board .board:not([data-hand]) {
+  pointer-events: auto;
+}
+.paper-moods .mood {
+  opacity: 0.85;
+  background: #fffaf5;
+  border-radius: 50%;
+}
+.paper-moods .mood.on {
+  opacity: 1;
+}

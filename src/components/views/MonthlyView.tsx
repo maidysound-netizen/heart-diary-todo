@@ -1,11 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Sheet, useApp } from "../DiaryApp";
+import { useApp } from "../DiaryApp";
+import { At, Paper } from "../Paper";
 import { MoodFace } from "../art";
-import { api, dayRange, hhmm, pad, prettyDate, today, WEEKDAYS, type Entry, type Todo } from "@/lib/client";
+import { api, dayRange, hhmm, pad, prettyDate, today, type Entry, type Todo } from "@/lib/client";
 
 type Cal = { entries: { d: string; mood: string | null; title: string }[]; todos: { d: string; total: number; done: number }[] };
+
+// 08_monthly.png 달력 칸 (일요일 시작, 6줄)
+const GRID_X = 0.1027;
+const COL_W = 0.1136;
+const GRID_Y = 0.3156;
+const ROW_H = 0.0753;
 
 export function MonthlyView({ date }: { date?: string }) {
   const { go } = useApp();
@@ -43,93 +50,72 @@ export function MonthlyView({ date }: { date?: string }) {
   const [y, m] = ym.split("-").map(Number);
   const first = new Date(y, m - 1, 1).getDay();
   const nDays = new Date(y, m, 0).getDate();
-  const cells: (string | null)[] = [...Array(first).fill(null), ...Array.from({ length: nDays }, (_, i) => `${ym}-${pad(i + 1)}`)];
-  while (cells.length % 7) cells.push(null);
   const shift = (n: number) => {
     const d = new Date(y, m - 1 + n, 1);
     setYm(`${d.getFullYear()}-${pad(d.getMonth() + 1)}`);
   };
   const tdy = today();
+  const done = detail?.todos.filter((t) => t.is_completed).length ?? 0;
+
+  const content = (
+    <>
+      <At x={0.225} y={0.156} w={0.2} h={0.035} className="fill-in hand center">
+        {y}년 {m}월
+      </At>
+      {error && <At x={0.12} y={0.215} w={0.7} className="error small">{error}</At>}
+      {Array.from({ length: nDays }, (_, i) => {
+        const day = `${ym}-${pad(i + 1)}`;
+        const idx = first + i;
+        const r = Math.floor(idx / 7), c = idx % 7;
+        const e = cal?.entries.find((x) => x.d === day);
+        const t = cal?.todos.find((x) => x.d === day);
+        return (
+          <At key={day} x={GRID_X + c * COL_W} y={GRID_Y + Math.min(r, 5) * ROW_H} w={COL_W} h={ROW_H}>
+            <button
+              className={`cal-cell ${day === sel ? "sel" : ""} ${day === tdy ? "is-today" : ""} ${c === 0 ? "sun" : c === 6 ? "sat" : ""}`}
+              onClick={() => (day === sel ? go({ name: "diary", date: day }) : setSel(day))}
+              aria-label={`${day}${e ? ", 일기 있음" : ""}${t ? `, 할 일 ${t.total}개` : ""}${day === sel ? " — 한 번 더 누르면 일기 열기" : ""}`}
+              aria-pressed={day === sel}
+            >
+              <span className="cal-n">{i + 1}</span>
+              {e && <span className="cal-mood">{e.mood ? <MoodFace mood={e.mood} /> : "♥"}</span>}
+              {t && <span className={`cal-t ${t.done === t.total ? "all" : ""}`}>{t.done}/{t.total}</span>}
+            </button>
+          </At>
+        );
+      })}
+      {/* NOTES 줄: 고른 날 요약 */}
+      <At x={0.12} y={0.834} w={0.75} h={0.026} className="note-line">
+        <b>{prettyDate(sel)}</b>
+        {detail?.entry && (
+          <span className="ellipsis">
+            {" "}
+            · ♡ {detail.entry.title || "일기 있음"}
+          </span>
+        )}
+      </At>
+      <At x={0.12} y={0.864} w={0.75} h={0.026} className="note-line ellipsis">
+        {!detail ? "불러오는 중…" : detail.todos.length ? `할 일 ${done}/${detail.todos.length} · ${detail.todos.map((t) => (t.due_at ? `${hhmm(t.due_at)} ` : "") + t.title).join(", ")}` : "이 날은 일정이 없어요"}
+      </At>
+      <At x={0.12} y={0.893} w={0.75} h={0.028} className="note-line">
+        <button className="link small" onClick={() => go({ name: "diary", date: sel })}>{detail?.entry ? "일기 열기" : "일기 쓰기"}</button>
+        <button className="link small" onClick={() => go({ name: "todo", date: sel })}>할 일 열기</button>
+      </At>
+    </>
+  );
 
   return (
-    <Sheet
+    <Paper
+      label="Monthly Planner"
       template="08_monthly"
-      left={
-        <div>
-          <div className="date-nav">
-            <button className="icon-btn" onClick={() => shift(-1)} aria-label="지난달">‹</button>
-            <h2 className="hand">{y}년 {m}월</h2>
-            <button className="icon-btn" onClick={() => shift(1)} aria-label="다음달">›</button>
-          </div>
-          {error && <p className="error center">{error}</p>}
-          <div className="cal" role="grid" aria-label={`${y}년 ${m}월 달력`}>
-            {WEEKDAYS.map((w, i) => (
-              <div key={w} className={`cal-h ${i === 0 ? "sun" : i === 6 ? "sat" : ""}`} role="columnheader">{w}</div>
-            ))}
-            {cells.map((d, i) => {
-              if (!d) return <div key={i} className="cal-c empty" />;
-              const e = cal?.entries.find((x) => x.d === d);
-              const t = cal?.todos.find((x) => x.d === d);
-              return (
-                <button
-                  key={d}
-                  role="gridcell"
-                  className={`cal-c ${d === sel ? "sel" : ""} ${d === tdy ? "is-today" : ""}`}
-                  onClick={() => setSel(d)}
-                  aria-label={`${d}${e ? ", 일기 있음" : ""}${t ? `, 할 일 ${t.total}개` : ""}`}
-                  aria-selected={d === sel}
-                >
-                  <span className="cal-n">{Number(d.slice(8))}</span>
-                  {e && <span className="cal-mood">{e.mood ? <MoodFace mood={e.mood} /> : "♥"}</span>}
-                  {t && <span className={`cal-t ${t.done === t.total ? "all" : ""}`}>{t.done}/{t.total}</span>}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      }
-      right={
-        <div className="month-detail">
-          <h2 className="hand center">{prettyDate(sel)}</h2>
-          {!detail ? (
-            <p className="muted center">불러오는 중…</p>
-          ) : (
-            <>
-              <div className="detail-card">
-                <h3>♡ 일기</h3>
-                {detail.entry ? (
-                  <>
-                    <p className="detail-title">
-                      {detail.entry.mood && <span className="mini-mood"><MoodFace mood={detail.entry.mood} /></span>}
-                      {detail.entry.title || "(제목 없음)"}
-                    </p>
-                    <p className="detail-text">{detail.entry.content_text.slice(0, 120) || "글 없이 그림·스티커로 남긴 날"}</p>
-                  </>
-                ) : (
-                  <p className="muted">아직 쓰지 않았어요.</p>
-                )}
-                <button className="btn-primary sm" onClick={() => go({ name: "diary", date: sel })}>
-                  {detail.entry ? "일기 열기" : "일기 쓰기"}
-                </button>
-              </div>
-              <div className="detail-card">
-                <h3>✓ 할 일</h3>
-                {detail.todos.length ? (
-                  <ul className="mini-todos">
-                    {detail.todos.slice(0, 5).map((t) => (
-                      <li key={t.id} className={t.is_completed ? "done" : ""}>
-                        {t.is_completed ? "☑" : "□"} {t.due_at && hhmm(t.due_at)} {t.title}
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="muted">일정이 없어요.</p>
-                )}
-                <button className="btn-ghost sm" onClick={() => go({ name: "todo", date: sel })}>할 일 열기</button>
-              </div>
-            </>
-          )}
-        </div>
+      decorKey={`monthly:${ym}`}
+      content={content}
+      pinned={
+        <At x={0.44} y={0.159} className="paper-nav">
+          <button className="icon-btn sm" onClick={() => shift(-1)} aria-label="지난달">‹</button>
+          <button className="icon-btn sm" onClick={() => { setYm(today().slice(0, 7)); setSel(today()); }} aria-label="이번 달로">•</button>
+          <button className="icon-btn sm" onClick={() => shift(1)} aria-label="다음달">›</button>
+        </At>
       }
     />
   );
