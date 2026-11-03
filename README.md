@@ -35,7 +35,7 @@ npm run dev
 
 ## 배포 (Vercel + Neon + Google OAuth)
 
-1. Vercel 프로젝트에 **Neon** 연동(Storage → Neon) → `DATABASE_URL` 자동 등록. 테이블은 첫 요청 때 자동 생성.
+1. **Neon** 프로젝트(AWS Singapore, `neon.ts`)에 연결: `npx neon@latest init ... && npx neon@latest deploy`로 `.env.local`에 `DATABASE_URL`을 받은 뒤, 같은 값을 Vercel Production/Preview 환경변수에 등록. 테이블은 첫 요청 때 자동 생성. Vercel 함수 리전도 `sin1`(vercel.json)로 DB와 맞춘다.
 2. Google Cloud Console → OAuth 클라이언트 ID(웹 애플리케이션) 생성
    - 승인된 리디렉션 URI: `https://<배포도메인>/api/auth/callback/google`
 3. Vercel 환경변수: `AUTH_SECRET`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET` (선택: Vercel Blob 연결 시 `BLOB_READ_WRITE_TOKEN`)
