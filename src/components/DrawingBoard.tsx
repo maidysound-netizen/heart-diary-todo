@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { flushSync } from "react-dom";
 import { STICKERS, Sticker } from "./art";
 import { api, ApiError, uid, type PageItem, type Stroke } from "@/lib/client";
 
@@ -130,6 +131,8 @@ export function DrawingBoard({
   const raf = useRef(0);
   const fileRef = useRef<HTMLInputElement>(null);
   const live = useRef<Stroke | null>(null);
+  const textAt = useRef<readonly [number, number] | null>(null);
+  const editOnUp = useRef<string | null>(null);
   const erased = useRef<Set<string> | null>(null);
   const lastPen = useRef(0);
   const dims = useRef({ w: 1, h: 1, dpr: 1 });
@@ -238,12 +241,10 @@ export function DrawingBoard({
       return;
     }
     if (tool === "text") {
-      // 글쓰기: 누른 자리에 바로 글상자가 생긴다 (그림 위에 겹쳐 쓰기)
+      // 글쓰기: 손을 뗄 때 그 자리에 글상자가 생긴다 (아이패드는 손을 뗄 때 포커스해야 키보드가 뜬다)
       e.preventDefault(); // 보드가 포커스를 가져가 새 글상자가 바로 닫히지 않도록
       if (editing) return setEditing(null);
-      const [x, y] = toLocal(e);
-      const it = addItem({ kind: "text", text: "", color, x: Math.min(x, 0.8), y: Math.max(0, y - 0.02), w: Math.max(0.15, Math.min(0.6, 0.95 - x)), h: 0.07 }, true);
-      setEditing(it.id);
+      textAt.current = toLocal(e);
       return;
     }
     if (e.pointerType === "pen") lastPen.current = Date.now();
@@ -281,6 +282,18 @@ export function DrawingBoard({
   };
 
   const onUp = () => {
+    const ta = textAt.current;
+    if (ta) {
+      textAt.current = null;
+      const [x, y] = ta;
+      let id = "";
+      flushSync(() => {
+        id = addItem({ kind: "text", text: "", color, x: Math.min(x, 0.8), y: Math.max(0, y - 0.02), w: Math.max(0.15, Math.min(0.6, 0.95 - x)), h: 0.07 }, true).id;
+        setEditing(id);
+      });
+      boxRef.current?.querySelector<HTMLTextAreaElement>(`[data-item="${id}"] textarea`)?.focus();
+      return;
+    }
     if (erased.current) {
       const gone = erased.current;
       erased.current = null;
@@ -379,7 +392,7 @@ export function DrawingBoard({
   const onItemDown = (e: React.PointerEvent, it: PageItem, mode: "move" | "resize") => {
     if (tool === "text" && it.kind === "text") {
       e.stopPropagation();
-      setEditing(it.id);
+      editOnUp.current = it.id;
       return;
     }
     if (tool !== "select" || editing === it.id) return;
@@ -404,6 +417,13 @@ export function DrawingBoard({
     }
   };
   const onItemUp = () => {
+    const eid = editOnUp.current;
+    if (eid) {
+      editOnUp.current = null;
+      flushSync(() => setEditing(eid));
+      boxRef.current?.querySelector<HTMLTextAreaElement>(`[data-item="${eid}"] textarea`)?.focus();
+      return;
+    }
     const d = drag.current;
     drag.current = null;
     if (!d) return;
@@ -526,6 +546,7 @@ export function DrawingBoard({
         {snap.items.map((it) => (
           <div
             key={it.id}
+            data-item={it.id}
             className={`item item-${it.kind} ${sel === it.id ? "sel" : ""}`}
             style={{
               left: `${it.x * 100}%`,

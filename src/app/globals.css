@@ -1892,3 +1892,37 @@ button:disabled {
 .board-canvas.live {
   pointer-events: none !important;
 }
+
+/* ───── 아이패드: 펜으로 그을 때 글자 선택(파란 영역)·길게 누르기 메뉴가 뜨지 않게 ───── */
+html,
+body {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+input,
+textarea,
+[contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+img {
+  -webkit-user-drag: none;
+}
+.board,
+.board *:not(textarea),
+.paper,
+.paper-board,
+.hub-board,
+.hub-draw {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.board,
+.paper-board,
+.hub-draw {
+  touch-action: none;
+}

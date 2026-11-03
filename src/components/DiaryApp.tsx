@@ -180,6 +180,20 @@ export default function DiaryApp({
 
   useEffect(() => setGl(webglAvailable()), []);
 
+  // 입력칸이 아닌 곳에서 시작한 글자 선택·길게 누르기 메뉴는 막는다 (아이패드 펜 그리기 중 파란 선택 영역)
+  useEffect(() => {
+    const editable = (t: EventTarget | null) => t instanceof Element && !!t.closest("input, textarea, [contenteditable=true]");
+    const block = (e: Event) => {
+      if (!editable(e.target)) e.preventDefault();
+    };
+    document.addEventListener("selectstart", block);
+    document.addEventListener("contextmenu", block);
+    return () => {
+      document.removeEventListener("selectstart", block);
+      document.removeEventListener("contextmenu", block);
+    };
+  }, []);
+
   useEffect(() => {
     const f = (e: PointerEvent) => (lastPointer.current = { x: e.clientX, y: e.clientY });
     window.addEventListener("pointerdown", f, true);
