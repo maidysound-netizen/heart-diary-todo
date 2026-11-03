@@ -52,6 +52,21 @@ export function WeeklyView({ date }: { date?: string }) {
     }
   };
 
+  /** 요일 칸 줄에 바로 쓰기: "14:00 회의"처럼 앞에 시각을 쓰면 그 시각이 마감이 된다 */
+  const addFor = async (d: string, raw: string) => {
+    const m = raw.trim().match(/^(\d{1,2}):(\d{2})\s+(.+)$/);
+    const title = (m ? m[3] : raw).trim();
+    if (!title) return;
+    const [y, mo, da] = d.split("-").map(Number);
+    const due = new Date(y, mo - 1, da, m ? Number(m[1]) : 23, m ? Number(m[2]) : 59);
+    try {
+      await api("/api/todos", { method: "POST", json: { title, due_at: due.toISOString() } });
+      await load();
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "적지 못했어요.");
+    }
+  };
+
   const s = parseYmd(start), en = parseYmd(addDays(start, 6));
   const tdy = today();
 
@@ -89,7 +104,7 @@ export function WeeklyView({ date }: { date?: string }) {
                       ♡ {e.title || "일기 있음"}
                     </button>
                   )}
-                  {list.slice(0, e ? 2 : 3).map((t) => (
+                  {list.slice(0, e ? 1 : 2).map((t) => (
                     <label key={t.id} className={`week-todo ${t.is_completed ? "done" : ""}`}>
                       <input type="checkbox" checked={t.is_completed} onChange={() => toggle(t)} />
                       <span>
@@ -97,10 +112,22 @@ export function WeeklyView({ date }: { date?: string }) {
                       </span>
                     </label>
                   ))}
-                  {list.length > (e ? 2 : 3) && (
+                  {list.length > (e ? 1 : 2) ? (
                     <button className="link small" onClick={() => go({ name: "todo", date: d })}>
-                      +{list.length - (e ? 2 : 3)}개 더
+                      +{list.length - (e ? 1 : 2)}개 더 보기
                     </button>
+                  ) : (
+                    <form
+                      className="line-edit week-add"
+                      onSubmit={(ev) => {
+                        ev.preventDefault();
+                        const input = ev.currentTarget.elements.namedItem("t") as HTMLInputElement;
+                        void addFor(d, input.value);
+                        input.value = "";
+                      }}
+                    >
+                      <input name="t" placeholder="+ 일정 쓰기 (예: 14:00 회의)" maxLength={200} aria-label={`${d} 일정 쓰기`} />
+                    </form>
                   )}
                 </>
               )}

@@ -15,7 +15,8 @@ const GRID_Y = 0.3156;
 const ROW_H = 0.0753;
 
 export function MonthlyView({ date }: { date?: string }) {
-  const { go } = useApp();
+  const { go, toast } = useApp();
+  const [ver, setVer] = useState(0);
   const init = date ?? today();
   const [ym, setYm] = useState(init.slice(0, 7));
   const [sel, setSel] = useState(init);
@@ -45,7 +46,22 @@ export function MonthlyView({ date }: { date?: string }) {
     ])
       .then(([a, b]) => setDetail({ entry: a.entry, todos: b.todos }))
       .catch(() => setDetail({ entry: null, todos: [] }));
-  }, [sel]);
+  }, [sel, ver]);
+
+  /** NOTES 줄에 바로 쓰기: 고른 날 일정 추가 ("14:00 회의"처럼 시각을 앞에 써도 됨) */
+  const addFor = async (raw: string) => {
+    const mt = raw.trim().match(/^(\d{1,2}):(\d{2})\s+(.+)$/);
+    const title = (mt ? mt[3] : raw).trim();
+    if (!title) return;
+    const [yy, mm, dd] = sel.split("-").map(Number);
+    try {
+      await api("/api/todos", { method: "POST", json: { title, due_at: new Date(yy, mm - 1, dd, mt ? Number(mt[1]) : 23, mt ? Number(mt[2]) : 59).toISOString() } });
+      setVer((v) => v + 1);
+      void load();
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "적지 못했어요.");
+    }
+  };
 
   const [y, m] = ym.split("-").map(Number);
   const first = new Date(y, m - 1, 1).getDay();
@@ -98,6 +114,17 @@ export function MonthlyView({ date }: { date?: string }) {
         {!detail ? "불러오는 중…" : detail.todos.length ? `할 일 ${done}/${detail.todos.length} · ${detail.todos.map((t) => (t.due_at ? `${hhmm(t.due_at)} ` : "") + t.title).join(", ")}` : "이 날은 일정이 없어요"}
       </At>
       <At x={0.12} y={0.893} w={0.75} h={0.028} className="note-line">
+        <form
+          className="line-edit"
+          onSubmit={(ev) => {
+            ev.preventDefault();
+            const input = ev.currentTarget.elements.namedItem("t") as HTMLInputElement;
+            void addFor(input.value);
+            input.value = "";
+          }}
+        >
+          <input name="t" placeholder="+ 이 날 일정 쓰기" maxLength={200} aria-label={`${sel} 일정 쓰기`} />
+        </form>
         <button className="link small" onClick={() => go({ name: "diary", date: sel })}>{detail?.entry ? "일기 열기" : "일기 쓰기"}</button>
         <button className="link small" onClick={() => go({ name: "todo", date: sel })}>할 일 열기</button>
       </At>

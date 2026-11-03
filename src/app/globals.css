@@ -1885,3 +1885,9 @@ button:disabled {
 .paper-moods .mood.on {
   opacity: 1;
 }
+.week-add input {
+  font-size: 1em !important;
+}
+.note-line .line-edit input {
+  font-size: 1em;
+}
