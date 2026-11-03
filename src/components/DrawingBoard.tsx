@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { STICKERS, Sticker } from "./art";
 import { api, ApiError, uid, type PageItem, type Stroke } from "@/lib/client";
 
-type Tool = "pen" | "hl" | "eraser" | "select";
-export const BOARD_ASPECT = 1.6; // 가로:세로 고정 → 정규화 좌표가 기기와 상관없이 같은 자리
+type Tool = "pen" | "hl" | "eraser" | "text" | "select";
+/** 보드 좌표는 0~1 정규화. 하트 페이지 전체를 덮을 때는 하트 바운딩 박스 기준이라 기기와 상관없이 같은 자리 */
+const DEFAULT_ASPECT = 1.6;
 
 const COLORS = ["#5B3A45", "#E5485F", "#F49AB2", "#F7C35F", "#7BBF6A", "#6FA8DC", "#A98BD9"];
 const SIZES = [0.0028, 0.0055, 0.011];
@@ -94,6 +95,8 @@ export function DrawingBoard({
   initialTool = "pen",
   autoPhoto,
   onBusy,
+  fill,
+  children,
 }: {
   strokes: Stroke[];
   items: PageItem[];
@@ -101,6 +104,10 @@ export function DrawingBoard({
   initialTool?: Tool;
   autoPhoto?: boolean;
   onBusy?: (busy: boolean) => void;
+  /** 부모(하트 페이지)를 꽉 채운다. 없으면 가로:세로 1.6 */
+  fill?: boolean;
+  /** 도구 모음과 보드를 서로 다른 곳(하트 아래 / 하트 안)에 놓을 때 */
+  children?: (parts: { toolbar: ReactNode; board: ReactNode; selTools: ReactNode }) => ReactNode;
 }) {
   const [snap, setSnap] = useState<Snapshot>({ strokes: initStrokes, items: initItems });
   const [tool, setTool] = useState<Tool>(initialTool);
@@ -175,11 +182,13 @@ export function DrawingBoard({
     return [Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), Math.min(1, Math.max(0, (e.clientY - r.top) / r.height))] as const;
   };
 
+  const aspect = () => (dims.current.h > 1 ? dims.current.w / dims.current.h : DEFAULT_ASPECT);
+
   const eraseAt = (x: number, y: number) => {
     const rad = 0.025;
     for (const s of snapRef.current.strokes) {
       if (erased.current!.has(s.id)) continue;
-      if (s.pts.some(([px, py]) => Math.hypot(px - x, (py - y) / BOARD_ASPECT) < rad)) erased.current!.add(s.id);
+      if (s.pts.some(([px, py]) => Math.hypot(px - x, (py - y) / aspect()) < rad)) erased.current!.add(s.id);
     }
     redraw(snapRef.current.strokes, erased.current!);
   };
@@ -188,6 +197,15 @@ export function DrawingBoard({
     if (tool === "select") {
       setSel(null);
       setEditing(null);
+      return;
+    }
+    if (tool === "text") {
+      // 글쓰기: 누른 자리에 바로 글상자가 생긴다 (그림 위에 겹쳐 쓰기)
+      e.preventDefault(); // 보드가 포커스를 가져가 새 글상자가 바로 닫히지 않도록
+      if (editing) return setEditing(null);
+      const [x, y] = toLocal(e);
+      const it = addItem({ kind: "text", text: "", color, x: Math.min(x, 0.8), y: Math.max(0, y - 0.02), w: 0.3, h: 0.09 }, true);
+      setEditing(it.id);
       return;
     }
     if (e.pointerType === "pen") lastPen.current = Date.now();
@@ -244,23 +262,18 @@ export function DrawingBoard({
   const maxZ = (kind: PageItem["kind"]) =>
     Math.max(Z_BASE[kind], ...snapRef.current.items.filter((i) => i.kind === kind).map((i) => i.z)) + 1;
 
-  const addItem = (it: Omit<PageItem, "id" | "z" | "rot"> & { rot?: number }) => {
+  const addItem = (it: Omit<PageItem, "id" | "z" | "rot"> & { rot?: number }, keepTool = false) => {
     const item: PageItem = { rot: 0, ...it, id: uid(), z: maxZ(it.kind) };
     commit({ ...snapRef.current, items: [...snapRef.current.items, item] });
-    setTool("select");
+    if (!keepTool) setTool("select");
     setSel(item.id);
     return item;
   };
 
   const addSticker = (key: string) => {
     setPalette(false);
-    const w = 0.15;
-    addItem({ kind: "sticker", key, x: 0.42 + Math.random() * 0.1, y: 0.3 + Math.random() * 0.1, w, h: w * BOARD_ASPECT, rot: Math.round(Math.random() * 20 - 10) });
-  };
-
-  const addText = () => {
-    const it = addItem({ kind: "text", text: "", color, x: 0.3, y: 0.4, w: 0.4, h: 0.16 });
-    setEditing(it.id);
+    const w = 0.12;
+    addItem({ kind: "sticker", key, x: 0.42 + Math.random() * 0.1, y: 0.35 + Math.random() * 0.1, w, h: w * aspect(), rot: Math.round(Math.random() * 20 - 10) });
   };
 
   const onPhoto = async (file: File | undefined) => {
@@ -280,8 +293,8 @@ export function DrawingBoard({
         // 사진 저장소가 연결되지 않은 환경: 작게 줄인 사본을 페이지에 함께 저장
         ({ src, ratio } = await downscale(file));
       }
-      const w = 0.32;
-      addItem({ kind: "photo", src, x: 0.08 + Math.random() * 0.1, y: 0.1, w, h: Math.min(0.9, w * BOARD_ASPECT * ratio), rot: -3 });
+      const w = 0.26;
+      addItem({ kind: "photo", src, x: 0.18 + Math.random() * 0.1, y: 0.3, w, h: Math.min(0.6, w * aspect() * ratio), rot: -3 });
     } catch (e) {
       alert(e instanceof Error ? e.message : "사진을 올리지 못했어요.");
     } finally {
@@ -318,6 +331,11 @@ export function DrawingBoard({
   // 개체 끌기/크기 조절 (선택 도구)
   const drag = useRef<{ id: string; mode: "move" | "resize"; sx: number; sy: number; start: PageItem; before: Snapshot } | null>(null);
   const onItemDown = (e: React.PointerEvent, it: PageItem, mode: "move" | "resize") => {
+    if (tool === "text" && it.kind === "text") {
+      e.stopPropagation();
+      setEditing(it.id);
+      return;
+    }
     if (tool !== "select" || editing === it.id) return;
     e.stopPropagation();
     e.preventDefault();
@@ -387,14 +405,14 @@ export function DrawingBoard({
 
   const selected = snap.items.find((i) => i.id === sel);
 
-  return (
-    <div className="board-wrap">
+  const toolbar = (
       <div className="board-tools" role="toolbar" aria-label="그리기 도구">
         {(
           [
             ["pen", "펜", "✎"],
             ["hl", "형광펜", "▍"],
             ["eraser", "지우개", "⌫"],
+            ["text", "글쓰기 (누른 자리에 글상자)", "T"],
             ["select", "선택·이동", "⤧"],
           ] as const
         ).map(([k, label, ic]) => (
@@ -435,16 +453,15 @@ export function DrawingBoard({
           {uploading ? "…" : "▣"}
           <span className="sr">사진</span>
         </button>
-        <button className="tool" onClick={addText} title="글상자">
-          T<span className="sr">글상자</span>
-        </button>
         <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(e) => onPhoto(e.target.files?.[0])} />
       </div>
+  );
 
+  const board = (
       <div
         ref={boxRef}
-        className={`board tool-${tool}`}
-        style={{ aspectRatio: String(BOARD_ASPECT) }}
+        className={`board tool-${tool} ${fill ? "fill" : ""}`}
+        style={fill ? undefined : { aspectRatio: String(DEFAULT_ASPECT) }}
         tabIndex={0}
         aria-label="그림·스티커·사진을 놓는 페이지"
       >
@@ -467,7 +484,7 @@ export function DrawingBoard({
               height: `${it.h * 100}%`,
               transform: `rotate(${it.rot}deg)`,
               zIndex: it.z,
-              pointerEvents: tool === "select" ? "auto" : "none",
+              pointerEvents: tool === "select" || (tool === "text" && it.kind === "text") ? "auto" : "none",
             }}
             onPointerDown={(e) => onItemDown(e, it, "move")}
             onPointerMove={onItemMove}
@@ -480,7 +497,9 @@ export function DrawingBoard({
             {it.kind === "text" &&
               (editing === it.id ? (
                 <textarea
-                  autoFocus
+                  ref={(el) => {
+                    if (el && document.activeElement !== el) requestAnimationFrame(() => el.focus());
+                  }}
                   defaultValue={it.text}
                   style={{ color: it.color }}
                   placeholder="글을 써 보세요"
@@ -505,8 +524,9 @@ export function DrawingBoard({
           </div>
         ))}
       </div>
+  );
 
-      {selected && tool === "select" && (
+  const selTools = selected && tool === "select" && (
         <div className="sel-tools">
           <button onClick={() => reorder(selected.id, 1)}>앞으로</button>
           <button onClick={() => reorder(selected.id, -1)}>뒤로</button>
@@ -514,7 +534,14 @@ export function DrawingBoard({
           {selected.kind === "text" && <button onClick={() => setEditing(selected.id)}>글 수정</button>}
           <button className="danger" onClick={() => remove(selected.id)}>삭제</button>
         </div>
-      )}
+  );
+
+  if (children) return <>{children({ toolbar, board, selTools })}</>;
+  return (
+    <div className="board-wrap">
+      {toolbar}
+      {board}
+      {selTools}
     </div>
   );
 }

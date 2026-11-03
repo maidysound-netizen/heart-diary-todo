@@ -105,7 +105,29 @@ export type Settings = {
   charm_key: string;
   nagging_mode: boolean;
   voice_enabled: boolean;
+  hub_layout: HubLayout | null;
 };
+
+/** 허브(첫 펼침) 스티커 판. 좌표는 하트 바운딩 박스 기준 0~1 */
+export type HubSticker = { id: string; kind: string; x: number; y: number; rot: number };
+export type HubLayout = { v: 2; pages: { id: string; stickers: HubSticker[] }[] };
+
+export const DEFAULT_HUB: HubLayout = {
+  v: 2,
+  pages: [
+    {
+      id: "p1",
+      stickers: [
+        { id: "s1", kind: "todo", x: 0.27, y: 0.36, rot: -6 },
+        { id: "s2", kind: "weekly", x: 0.73, y: 0.36, rot: 5 },
+        { id: "s3", kind: "diary", x: 0.34, y: 0.58, rot: 4 },
+        { id: "s4", kind: "monthly", x: 0.66, y: 0.58, rot: -4 },
+      ],
+    },
+  ],
+};
+
+export type MusicLink = { id: string; url: string; title: string; created_at: string };
 
 export const DEFAULT_SETTINGS: Settings = {
   cover_color: "#E8A6B5",
@@ -114,6 +136,7 @@ export const DEFAULT_SETTINGS: Settings = {
   charm_key: "heart",
   nagging_mode: false,
   voice_enabled: false,
+  hub_layout: null,
 };
 
 export const uid = () => Math.random().toString(36).slice(2, 10);

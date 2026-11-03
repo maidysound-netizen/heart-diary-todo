@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Spread, useApp } from "../DiaryApp";
+import { Sheet, useApp } from "../DiaryApp";
 import { addDays, api, dayRange, hhmm, localYmdOf, pad, prettyDate, today, type Todo } from "@/lib/client";
 
 type Form = { id?: string; title: string; description: string; date: string; time: string };
@@ -135,7 +135,7 @@ export function TodoView({ date: initDate }: { date?: string }) {
   const done = todos.filter((t) => t.is_completed).length;
 
   return (
-    <Spread
+    <Sheet
       template="06_todo"
       left={
         <div className="todo-left">

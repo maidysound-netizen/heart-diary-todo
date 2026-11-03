@@ -51,6 +51,14 @@ export function FeatureIcon({ kind }: { kind: string }) {
         <path {...S} d="M22 24.5c1.2 1.2 2.8 1.2 4 0" />
       </>
     ),
+    music: (
+      <>
+        <path {...S} d="M19 33V13l18-4v20" />
+        <ellipse {...S} cx="15" cy="33" rx="4.5" ry="3.5" />
+        <ellipse {...S} cx="33" cy="29" rx="4.5" ry="3.5" />
+        <path {...S} d="M19 19l18-4" />
+      </>
+    ),
     decorate: (
       <>
         <path {...S} d="M24 22c-6-8-14-8-14-2s8 5 14 2zM24 22c6-8 14-8 14-2s-8 5-14 2z" />

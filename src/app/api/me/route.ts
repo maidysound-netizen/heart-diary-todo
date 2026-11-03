@@ -26,7 +26,7 @@ export const PATCH = handle(async (req: Request) => {
     if (!ok(b[k])) throw new HttpError(400, `${k} 값이 올바르지 않아요.`);
     return b[k] as T;
   };
-  const hub = pick<unknown>("hub_layout", (v) => v === null || (typeof v === "object" && JSON.stringify(v).length < 5000));
+  const hub = pick<unknown>("hub_layout", (v) => v === null || (typeof v === "object" && JSON.stringify(v).length < 20000));
   const [settings] = await query(
     `UPDATE diary_settings SET cover_color = $2, ribbon_key = $3, chain_key = $4, charm_key = $5,
        nagging_mode = $6, voice_enabled = $7, hub_layout = $8, updated_at = now()

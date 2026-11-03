@@ -1,84 +1,245 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Spread, useApp, type View } from "../DiaryApp";
-import { FeatureIcon, Sticker } from "../art";
-import { api, dayRange, prettyDate, today, type Todo } from "@/lib/client";
+import { useEffect, useRef, useState } from "react";
+import { Sheet, useApp } from "../DiaryApp";
+import { FeatureIcon } from "../art";
+import { FEATURES, FEATURE_ORDER } from "../features";
+import { insideHeart } from "@/lib/heart";
+import { uid, type HubSticker } from "@/lib/client";
 
-type Feat = { kind: string; label: string; sub: string; color: string; rot: number; to: View | "chat" };
+const MAX_PAGES = 12;
+const MAX_STICKERS = 24;
 
-const LEFT: Feat[] = [
-  { kind: "diary", label: "Diary", sub: "오늘의 일기", color: "#FBD5DF", rot: -5, to: { name: "diary" } },
-  { kind: "todo", label: "Todo", sub: "할 일", color: "#FDE3C8", rot: 4, to: { name: "todo" } },
-  { kind: "weekly", label: "Weekly", sub: "주간 계획", color: "#E3D7F5", rot: 3, to: { name: "weekly" } },
-  { kind: "monthly", label: "Monthly", sub: "월간 달력", color: "#FFF0B8", rot: -4, to: { name: "monthly" } },
-];
-const RIGHT: Feat[] = [
-  { kind: "draw", label: "Draw", sub: "펜으로 그리기", color: "#D9EEF7", rot: 4, to: { name: "diary", tool: "draw" } },
-  { kind: "photo", label: "Photo", sub: "사진 붙이기", color: "#E2F0D9", rot: -3, to: { name: "diary", tool: "photo" } },
-  { kind: "chat", label: "Chat", sub: "모모와 대화", color: "#FFE0E8", rot: -5, to: "chat" },
-  { kind: "decorate", label: "Decorate", sub: "표지 꾸미기", color: "#F7E1CF", rot: 3, to: { name: "decorate" } },
-];
-
-function FeatSticker({ f }: { f: Feat }) {
-  const { go, openChat } = useApp();
+function StickerFace({ kind }: { kind: string }) {
+  const f = FEATURES[kind];
   return (
-    <button
-      className="feat"
-      style={{ ["--c" as string]: f.color, ["--rot" as string]: `${f.rot}deg` }}
-      onClick={() => (f.to === "chat" ? openChat() : go(f.to))}
-    >
+    <>
       <span className="feat-tape" aria-hidden="true" />
       <span className="feat-icon">
-        <FeatureIcon kind={f.kind} />
+        <FeatureIcon kind={kind} />
       </span>
-      <span className="feat-label">{f.label}</span>
-      <span className="feat-sub">{f.sub}</span>
-    </button>
+      <span className="feat-label">{f?.label ?? kind}</span>
+    </>
   );
 }
 
+/** 첫 펼침: 하트 위에 붙인 기능 스티커 + 아래 스티커 트레이 + 다음 장 */
 export function HubView() {
-  const { user, closeBook } = useApp();
-  const [left, setLeft] = useState<number | null>(null);
+  const { hub, setHub, hubPage, turnHub, go, openChat, toast } = useApp();
+  const boardRef = useRef<HTMLDivElement>(null);
+  const page = hub.pages[hubPage];
+  const [dragPos, setDragPos] = useState<{ id: string; x: number; y: number } | null>(null);
+  const [ghost, setGhost] = useState<{ kind: string; x: number; y: number } | null>(null);
+  const press = useRef<{ id?: string; kind?: string; sx: number; sy: number; moved: boolean } | null>(null);
+
+  const toLocal = (cx: number, cy: number) => {
+    const r = boardRef.current!.getBoundingClientRect();
+    return { u: (cx - r.left) / r.width, v: (cy - r.top) / r.height };
+  };
+
+  const updatePage = (stickers: HubSticker[]) =>
+    setHub({ ...hub, pages: hub.pages.map((p, i) => (i === hubPage ? { ...p, stickers } : p)) });
+
+  const addSticker = (kind: string, u?: number, v?: number) => {
+    if (page.stickers.length >= MAX_STICKERS) return toast("한 장에는 스티커를 24개까지 붙일 수 있어요.");
+    // 자리를 안 정했으면 하트 가운데 근처 빈 곳을 찾는다
+    let x = u, y = v;
+    for (let i = 0; x === undefined && i < 40; i++) {
+      const cx = 0.22 + Math.random() * 0.56, cy = 0.3 + Math.random() * 0.4;
+      if (insideHeart(cx, cy, 0.08) && page.stickers.every((s) => Math.hypot(s.x - cx, s.y - cy) > 0.12)) {
+        x = cx;
+        y = cy;
+      }
+    }
+    updatePage([...page.stickers, { id: uid(), kind, x: x ?? 0.5, y: y ?? 0.5, rot: Math.round(Math.random() * 14 - 7) }]);
+  };
+
+  const open = (kind: string) => {
+    const to = FEATURES[kind]?.to;
+    if (!to) return;
+    if (to === "chat") openChat();
+    else go(to);
+  };
+
+  // 붙인 스티커: 누르면 열고, 끌면 옮기고, 하트 밖으로 끌어내면 떼어낸다
+  const onStickerDown = (e: React.PointerEvent, s: HubSticker) => {
+    if (e.button > 0) return;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    press.current = { id: s.id, sx: e.clientX, sy: e.clientY, moved: false };
+  };
+  const onStickerMove = (e: React.PointerEvent, s: HubSticker) => {
+    const p = press.current;
+    if (!p || p.id !== s.id) return;
+    if (!p.moved && Math.hypot(e.clientX - p.sx, e.clientY - p.sy) < 6) return;
+    p.moved = true;
+    const { u, v } = toLocal(e.clientX, e.clientY);
+    setDragPos({ id: s.id, x: u, y: v });
+  };
+  const onStickerUp = (e: React.PointerEvent, s: HubSticker) => {
+    const p = press.current;
+    press.current = null;
+    setDragPos(null);
+    if (!p || p.id !== s.id) return;
+    if (!p.moved) return open(s.kind);
+    const { u, v } = toLocal(e.clientX, e.clientY);
+    if (!insideHeart(u, v, 0.02)) {
+      updatePage(page.stickers.filter((x) => x.id !== s.id));
+      toast(`${FEATURES[s.kind]?.label ?? "스티커"} 스티커를 떼어냈어요.`);
+    } else {
+      updatePage(page.stickers.map((x) => (x.id === s.id ? { ...x, x: u, y: v } : x)));
+    }
+  };
+
+  // 트레이 스티커: 하트 위로 끌어다 놓으면 붙는다 (그냥 누르면 빈 자리에 붙는다)
+  const onTrayDown = (e: React.PointerEvent, kind: string) => {
+    if (e.button > 0) return;
+    e.preventDefault();
+    press.current = { kind, sx: e.clientX, sy: e.clientY, moved: false };
+  };
   useEffect(() => {
-    const { from, to } = dayRange(today());
-    api<{ todos: Todo[] }>(`/api/todos?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&undated=1`)
-      .then((r) => setLeft(r.todos.filter((t) => !t.is_completed).length))
-      .catch(() => setLeft(null));
-  }, []);
+    const move = (e: PointerEvent) => {
+      const p = press.current;
+      if (!p?.kind) return;
+      if (!p.moved && Math.hypot(e.clientX - p.sx, e.clientY - p.sy) < 6) return;
+      p.moved = true;
+      setGhost({ kind: p.kind, x: e.clientX, y: e.clientY });
+    };
+    const up = (e: PointerEvent) => {
+      const p = press.current;
+      if (!p?.kind) return;
+      press.current = null;
+      setGhost(null);
+      if (!p.moved) return addSticker(p.kind);
+      const { u, v } = toLocal(e.clientX, e.clientY);
+      if (insideHeart(u, v, 0.03)) addSticker(p.kind, u, v);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    return () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+  });
+
+  const next = () => {
+    if (hubPage < hub.pages.length - 1) return turnHub(hubPage + 1);
+    if (hub.pages.length >= MAX_PAGES) return toast("스티커 판은 12장까지 만들 수 있어요.");
+    setHub({ ...hub, pages: [...hub.pages, { id: uid(), stickers: [] }] });
+    turnHub(hubPage + 1);
+  };
+
+  const removePage = () => {
+    if (hubPage === 0) return;
+    setHub({ ...hub, pages: hub.pages.filter((_, i) => i !== hubPage) });
+    turnHub(hubPage - 1);
+  };
+
   return (
-    <Spread
-      hub
-      left={
-        <div className="hub">
-          <h1 className="hand hub-title">♡ My Heart Diary ♡</h1>
-          <p className="hub-date">{prettyDate(today())}</p>
-          <div className="feat-grid">
-            {LEFT.map((f) => (
-              <FeatSticker key={f.kind} f={f} />
-            ))}
+    <>
+      <Sheet
+        full={
+          <div ref={boardRef} className="hub-board">
+            {!page.stickers.length && (
+              <p className="hub-empty hand">
+                빈 페이지예요 ♡<br />
+                아래 스티커를 끌어다 붙여 보세요
+              </p>
+            )}
+            {page.stickers.map((s) => {
+              const pos = dragPos?.id === s.id ? dragPos : s;
+              const f = FEATURES[s.kind];
+              return (
+                <div
+                  key={s.id}
+                  className={`placed ${dragPos?.id === s.id ? "dragging" : ""}`}
+                  style={{ left: `${pos.x * 100}%`, top: `${pos.y * 100}%`, ["--rot" as string]: `${s.rot}deg`, ["--c" as string]: f?.color }}
+                >
+                  <button
+                    className="feat"
+                    onPointerDown={(e) => onStickerDown(e, s)}
+                    onPointerMove={(e) => onStickerMove(e, s)}
+                    onPointerUp={(e) => onStickerUp(e, s)}
+                    onPointerCancel={() => {
+                      press.current = null;
+                      setDragPos(null);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        open(s.kind);
+                      } else if (e.key === "Delete" || e.key === "Backspace") {
+                        updatePage(page.stickers.filter((x) => x.id !== s.id));
+                      }
+                    }}
+                    aria-label={`${f?.label ?? s.kind} 페이지 열기 (끌어서 옮기기, 하트 밖으로 끌면 떼기)`}
+                  >
+                    <StickerFace kind={s.kind} />
+                  </button>
+                  <button className="unstick" onClick={() => updatePage(page.stickers.filter((x) => x.id !== s.id))} aria-label="스티커 떼기">
+                    ×
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        }
+        extras={
+          <>
+            {hubPage > 0 && (
+              <button className="page-arrow prev" onClick={() => turnHub(hubPage - 1)} aria-label="이전 장">
+                ↙ <span className="hand">Prev</span>
+              </button>
+            )}
+            <button className="page-arrow next" onClick={next} aria-label={hubPage < hub.pages.length - 1 ? "다음 장" : "새 장 만들기"}>
+              <span className="hand">{hubPage < hub.pages.length - 1 ? "Next page" : "New page"}</span> ↘
+            </button>
+          </>
+        }
+        below={
+          <div className="tray-wrap">
+            <div className="tray-head">
+              <span className="hand">스티커 시트</span>
+              <span className="muted small">하트 위로 끌어다 붙이고, 붙인 스티커를 누르면 그 페이지로 넘어가요</span>
+              <span className="page-no">
+                {hubPage + 1} / {hub.pages.length}
+                {hubPage > 0 && !page.stickers.length && (
+                  <button className="link small" onClick={removePage}>
+                    이 장 지우기
+                  </button>
+                )}
+              </span>
+            </div>
+            <div className="tray" role="list" aria-label="붙일 수 있는 스티커">
+              {FEATURE_ORDER.map((k) => (
+                <button
+                  key={k}
+                  role="listitem"
+                  className="feat tray-item"
+                  style={{ ["--c" as string]: FEATURES[k].color, ["--rot" as string]: "0deg" }}
+                  onPointerDown={(e) => onTrayDown(e, k)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      addSticker(k);
+                    }
+                  }}
+                  title={`${FEATURES[k].label} — ${FEATURES[k].sub}`}
+                  aria-label={`${FEATURES[k].label} 스티커 붙이기`}
+                >
+                  <StickerFace kind={k} />
+                </button>
+              ))}
+            </div>
+          </div>
+        }
+      />
+      {ghost && (
+        <div className="drag-ghost" style={{ left: ghost.x, top: ghost.y, ["--c" as string]: FEATURES[ghost.kind]?.color }} aria-hidden="true">
+          <div className="feat">
+            <StickerFace kind={ghost.kind} />
           </div>
         </div>
-      }
-      leftFoot={<span className="deco-sticker" aria-hidden="true"><Sticker k="bear" /></span>}
-      right={
-        <div className="hub">
-          <p className="hand hub-greet">
-            {user.name ?? "나"}의 하루{left != null && <> · 남은 할 일 <b>{left}</b>개</>}
-          </p>
-          <div className="feat-grid">
-            {RIGHT.map((f) => (
-              <FeatSticker key={f.kind} f={f} />
-            ))}
-          </div>
-        </div>
-      }
-      rightFoot={
-        <button className="ribbon-btn" onClick={closeBook}>
-          책 덮기
-        </button>
-      }
-    />
+      )}
+    </>
   );
 }

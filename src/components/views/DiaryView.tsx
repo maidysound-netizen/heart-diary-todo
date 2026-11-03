@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Spread, useApp } from "../DiaryApp";
+import { Sheet, useApp } from "../DiaryApp";
 import { DrawingBoard } from "../DrawingBoard";
 import { MOODS, MoodFace } from "../art";
-import { addDays, api, prettyDate, today, type Entry, type PageItem, type Stroke } from "@/lib/client";
+import { addDays, api, prettyDate, today, uid, type Entry, type PageItem, type Stroke } from "@/lib/client";
 import catalog from "@/lib/templates.json";
 
 type Draft = { title: string; content_text: string; mood: string; template_key: string; strokes: Stroke[]; items: PageItem[] };
@@ -13,15 +13,28 @@ const EMPTY: Draft = { title: "", content_text: "", mood: "", template_key: "05_
 
 function toDraft(e: Entry | null): Draft {
   if (!e) return EMPTY;
+  const items = [...(e.page_layout?.items ?? [])];
+  // 예전 일기(본문이 따로 있던 것)는 본문을 페이지 위 글상자로 옮겨 보여준다
+  if (e.content_text && !items.some((i) => i.kind === "text")) {
+    items.push({ id: uid(), kind: "text", text: e.content_text, color: "#5B3A45", x: 0.16, y: 0.3, w: 0.42, h: 0.3, rot: 0, z: 301 });
+  }
   return {
     title: e.title,
     content_text: e.content_text,
     mood: e.mood ?? "",
     template_key: e.template_key,
     strokes: e.drawing_data?.strokes ?? [],
-    items: e.page_layout?.items ?? [],
+    items,
   };
 }
+
+/** 본문 검색·월간 미리보기용: 페이지 위 글상자를 위→아래, 왼→오 순서로 이어 붙인다 */
+const textOf = (items: PageItem[]) =>
+  items
+    .filter((i) => i.kind === "text" && i.text?.trim())
+    .sort((a, b) => a.y - b.y || a.x - b.x)
+    .map((i) => i.text!.trim())
+    .join("\n");
 
 export function DiaryView({ date: initDate, tool }: { date?: string; tool?: "draw" | "photo" }) {
   const { go, toast, setLeaveGuard } = useApp();
@@ -70,7 +83,7 @@ export function DiaryView({ date: initDate, tool }: { date?: string; tool?: "dra
     const body = {
       entry_date: date,
       title: d.title,
-      content_text: d.content_text,
+      content_text: textOf(d.items).slice(0, 20000),
       mood: d.mood,
       template_key: d.template_key,
       drawing_data: { v: 1, strokes: d.strokes },
@@ -137,105 +150,130 @@ export function DiaryView({ date: initDate, tool }: { date?: string; tool?: "dra
     error: "저장 실패 — 다시 시도해 주세요",
   }[status];
 
-  const left = (
-    <div className="diary-left">
-      <div className="date-nav">
-        <button className="icon-btn" onClick={() => go({ name: "diary", date: addDays(date, -1) })} aria-label="전날">‹</button>
-        <h2 className="hand">{prettyDate(date)}</h2>
-        <button className="icon-btn" onClick={() => go({ name: "diary", date: addDays(date, 1) })} aria-label="다음날">›</button>
-      </div>
-      {loading ? (
-        <p className="muted center">펼치는 중…</p>
-      ) : loadError ? (
-        <div className="center">
-          <p className="error">{loadError}</p>
-          <button className="btn-ghost" onClick={load}>다시 시도</button>
+  const header = (
+    <>
+      <div className="lobe lobe-l">
+        <div className="date-nav">
+          <button className="icon-btn" onClick={() => go({ name: "diary", date: addDays(date, -1) })} aria-label="전날">‹</button>
+          <h2 className="hand">{prettyDate(date)}</h2>
+          <button className="icon-btn" onClick={() => go({ name: "diary", date: addDays(date, 1) })} aria-label="다음날">›</button>
         </div>
-      ) : (
-        <>
-          <label className="field">
-            <span>제목</span>
-            <input value={draft.title} maxLength={160} placeholder="오늘의 제목" onChange={(e) => patch({ title: e.target.value })} />
-          </label>
-          <div className="mood-row" role="radiogroup" aria-label="오늘의 기분">
-            {MOODS.map((m) => (
-              <button
-                key={m.key}
-                role="radio"
-                aria-checked={draft.mood === m.key}
-                className={`mood ${draft.mood === m.key ? "on" : ""}`}
-                onClick={() => patch({ mood: draft.mood === m.key ? "" : m.key })}
-                title={m.label}
-              >
-                <MoodFace mood={m.key} />
-                <span className="sr">{m.label}</span>
-              </button>
-            ))}
-          </div>
-          <textarea
-            className="lined"
-            value={draft.content_text}
-            maxLength={20000}
-            placeholder="오늘의 작은 순간들을 적어 보세요…"
-            onChange={(e) => patch({ content_text: e.target.value })}
-            aria-label="본문"
-          />
-        </>
-      )}
-    </div>
+        <input
+          className="title-input hand"
+          value={draft.title}
+          maxLength={160}
+          placeholder="오늘의 제목"
+          onChange={(e) => patch({ title: e.target.value })}
+          aria-label="제목"
+          disabled={loading || !!loadError}
+        />
+      </div>
+      <div className="lobe lobe-r">
+        <div className="mood-row" role="radiogroup" aria-label="오늘의 기분">
+          {MOODS.map((m) => (
+            <button
+              key={m.key}
+              role="radio"
+              aria-checked={draft.mood === m.key}
+              className={`mood ${draft.mood === m.key ? "on" : ""}`}
+              onClick={() => patch({ mood: draft.mood === m.key ? "" : m.key })}
+              title={m.label}
+            >
+              <MoodFace mood={m.key} />
+              <span className="sr">{m.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </>
   );
 
-  const right = loading || loadError ? (
-    <div />
-  ) : (
-    <div className="diary-right">
-      <div className="tpl-row" role="radiogroup" aria-label="속지 선택">
-        {catalog.templates.map((t) => (
-          <button
-            key={t.id}
-            role="radio"
-            aria-checked={draft.template_key === t.id}
-            className={`tpl ${draft.template_key === t.id ? "on" : ""}`}
-            onClick={() => patch({ template_key: t.id })}
-            title={t.label}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={`/templates/${t.id}_thumb.webp`} alt="" />
-            <span>{t.label}</span>
-          </button>
-        ))}
-      </div>
-      <DrawingBoard
-        key={boardKey}
-        strokes={draft.strokes}
-        items={draft.items}
-        onChange={onBoard}
-        initialTool={tool === "photo" ? "select" : "pen"}
-        autoPhoto={tool === "photo"}
+  if (loading || loadError) {
+    return (
+      <Sheet
+        template={draft.template_key}
+        full={
+          <>
+            {header}
+            <div className="sheet-center">
+              {loadError ? (
+                <>
+                  <p className="error">{loadError}</p>
+                  <button className="btn-ghost" onClick={load}>다시 시도</button>
+                </>
+              ) : (
+                <p className="muted">펼치는 중…</p>
+              )}
+            </div>
+          </>
+        }
       />
-    </div>
-  );
+    );
+  }
 
   return (
-    <Spread
-      template={draft.template_key}
-      left={left}
-      leftFoot={
-        <div className="foot-actions">
-          <button className="btn-primary" onClick={() => void save()} disabled={loading || !!loadError || status === "saving"}>
-            저장
-          </button>
-          {entry && (
-            <button className="btn-ghost danger" onClick={remove}>
-              삭제
-            </button>
-          )}
-          <span className={`save-state s-${status || "idle"}`} role="status">
-            {statusText}
-          </span>
-        </div>
-      }
-      right={right}
-    />
+    <DrawingBoard
+      key={boardKey}
+      fill
+      strokes={draft.strokes}
+      items={draft.items}
+      onChange={onBoard}
+      initialTool={tool === "photo" ? "select" : tool === "draw" ? "pen" : "text"}
+      autoPhoto={tool === "photo"}
+    >
+      {({ toolbar, board, selTools }) => (
+        <Sheet
+          template={draft.template_key}
+          full={
+            <>
+              {board}
+              {header}
+              {!draft.items.length && !draft.strokes.length && (
+                <p className="board-hint hand" aria-hidden="true">
+                  T를 누르고 아무 곳이나 눌러 글을 쓰고, ✎로 그 위에 그림을 그려요
+                </p>
+              )}
+            </>
+          }
+          below={
+            <div className="diary-below">
+              {toolbar}
+              <div className="diary-below-row">
+                <div className="tpl-row" role="radiogroup" aria-label="속지 선택">
+                  {catalog.templates.map((t) => (
+                    <button
+                      key={t.id}
+                      role="radio"
+                      aria-checked={draft.template_key === t.id}
+                      className={`tpl ${draft.template_key === t.id ? "on" : ""}`}
+                      onClick={() => patch({ template_key: t.id })}
+                      title={t.label}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={`/templates/${t.id}_thumb.webp`} alt="" />
+                      <span>{t.label}</span>
+                    </button>
+                  ))}
+                </div>
+                {selTools}
+                <div className="foot-actions">
+                  <button className="btn-primary" onClick={() => void save()} disabled={status === "saving"}>
+                    저장
+                  </button>
+                  {entry && (
+                    <button className="btn-ghost danger" onClick={remove}>
+                      삭제
+                    </button>
+                  )}
+                  <span className={`save-state s-${status || "idle"}`} role="status">
+                    {statusText}
+                  </span>
+                </div>
+              </div>
+            </div>
+          }
+        />
+      )}
+    </DrawingBoard>
   );
 }

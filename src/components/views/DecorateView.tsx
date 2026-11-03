@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Spread, useApp } from "../DiaryApp";
+import { Sheet, useApp } from "../DiaryApp";
 import { api, type Settings } from "@/lib/client";
 
 const COVERS = ["#E8A6B5", "#F4C2CF", "#C9B3E6", "#A9D3C4", "#F6D58E", "#A94C68"];
@@ -52,7 +52,7 @@ export function DecorateView() {
   );
 
   return (
-    <Spread
+    <Sheet
       left={
         <div className="decorate">
           <h2 className="hand center">표지 꾸미기</h2>

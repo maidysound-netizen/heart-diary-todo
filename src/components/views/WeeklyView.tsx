@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Spread, useApp } from "../DiaryApp";
+import { Sheet, useApp } from "../DiaryApp";
 import { MoodFace } from "../art";
 import { addDays, api, dayRange, hhmm, localYmdOf, parseYmd, today, weekStart, WEEKDAYS, type Todo } from "@/lib/client";
 
@@ -97,7 +97,7 @@ export function WeeklyView({ date }: { date?: string }) {
     loading ? <p className="muted center">불러오는 중…</p> : error ? <p className="error center">{error}</p> : <div className="week-list">{list.map(day)}</div>;
 
   return (
-    <Spread
+    <Sheet
       template="07_weekly"
       left={
         <div>

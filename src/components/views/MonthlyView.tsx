@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Spread, useApp } from "../DiaryApp";
+import { Sheet, useApp } from "../DiaryApp";
 import { MoodFace } from "../art";
 import { api, dayRange, hhmm, pad, prettyDate, today, WEEKDAYS, type Entry, type Todo } from "@/lib/client";
 
@@ -52,7 +52,7 @@ export function MonthlyView({ date }: { date?: string }) {
   const tdy = today();
 
   return (
-    <Spread
+    <Sheet
       template="08_monthly"
       left={
         <div>

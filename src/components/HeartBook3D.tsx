@@ -1,50 +1,60 @@
 "use client";
 
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import * as THREE from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
-import { HEART_SEGMENTS, HEART_START, HEART_SVG_PATH, PAGE_H, PAGE_W, heartTo3D, sampleHeart } from "@/lib/heart";
+import { HEART_H, HEART_SEGMENTS, HEART_START, HEART_SVG_PATH, HEART_W, halfHeartPath, heartTo3D, sampleHeart } from "@/lib/heart";
 import type { Settings } from "@/lib/client";
 
 export type Rect = { x: number; y: number; w: number; h: number };
-export type SpreadRects = { left: Rect; right: Rect };
-export type Focus = "both" | "left" | "right";
+export type Insets = { top: number; bottom: number };
 
 type Props = {
   open: boolean;
-  focus: Focus;
   flip: { id: number; dir: 1 | -1 } | null;
   settings: Settings;
   titleFont: string;
   reducedMotion: boolean;
-  topInset: number;
-  onRects: (r: SpreadRects | null) => void;
+  insets: Insets;
+  onRect: (r: Rect | null) => void;
   onCoverClick: () => void;
 };
 
 const COVER_T = 0.05; // 표지 두께
-const BLOCK_T = 0.14; // 내지 묶음 두께
+const BLOCK_T = 0.16; // 내지 묶음 두께
 const PAGE_Z = COVER_T + BLOCK_T; // 내지 윗면 높이
-const CX = heartTo3D(0.5, 0.5)[0]; // 오른쪽 페이지 중심 x
+const DOOR_SCALE = 1.03; // 표지는 내지보다 살짝 크다
+const HINGE_X = (HEART_W / 2) * DOOR_SCALE * 0.985; // 양문 힌지(하트 좌우 끝)
+const DOOR_OPEN = Math.PI - 0.12; // 다 열면 바깥쪽 끝이 탁자에 살짝 닿는다
 const RIBBON_COLORS: Record<string, string> = { rose: "#E58FA5", cream: "#FFF1E0", lilac: "#C9B3E6", cherry: "#A94C68" };
 const CHAIN_COLORS: Record<string, string> = { gold: "#D9B56F", silver: "#C9CDD6" };
 
-function heartShape(scale = 1, mirror = false): THREE.Shape {
+type Side = "full" | "left" | "right";
+
+/** 하트(또는 가운데 세로선에서 자른 반쪽) 외곽선 */
+function heartShape(scale = 1, side: Side = "full", dx = 0): THREE.Shape {
   const P = (u: number, v: number): [number, number] => {
     const [x, y] = heartTo3D(u, v, scale);
-    return [mirror ? -x : x, y];
+    return [x + dx, y];
   };
   const s = new THREE.Shape();
-  s.moveTo(...P(...HEART_START));
-  for (const g of HEART_SEGMENTS) s.bezierCurveTo(...P(g[0], g[1]), ...P(g[2], g[3]), ...P(g[4], g[5]));
+  if (side === "full") {
+    s.moveTo(...P(...HEART_START));
+    for (const g of HEART_SEGMENTS) s.bezierCurveTo(...P(g[0], g[1]), ...P(g[2], g[3]), ...P(g[4], g[5]));
+    return s;
+  }
+  const h = halfHeartPath(side);
+  s.moveTo(...P(...h.start));
+  for (const g of h.segs) s.bezierCurveTo(...P(g[0], g[1]), ...P(g[2], g[3]), ...P(g[4], g[5]));
+  s.lineTo(...P(...h.close));
   return s;
 }
 
-/** 하트 바운딩 박스 기준으로 UV를 0..1로 다시 매긴다 (캔버스 텍스처가 하트에 딱 맞게) */
-function fitUV(geo: THREE.BufferGeometry, scale = 1) {
-  const minX = CX - (PAGE_W / 2) * scale, w = PAGE_W * scale;
-  const minY = (-PAGE_H / 2) * scale, h = PAGE_H * scale;
+/** 하트 전체 바운딩 박스 기준으로 UV를 0..1로 다시 매긴다 (반쪽도 같은 텍스처의 절반을 갖는다) */
+function fitUV(geo: THREE.BufferGeometry, scale = 1, dx = 0) {
+  const w = HEART_W * scale, h = HEART_H * scale;
+  const minX = -w / 2 + dx, minY = -h / 2;
   const pos = geo.attributes.position;
   const uv = new Float32Array(pos.count * 2);
   for (let i = 0; i < pos.count; i++) {
@@ -199,6 +209,20 @@ function paperTexture() {
     c.lineWidth = 3;
     c.setLineDash([8, 10]);
     c.stroke(heartPath2D(W, H, 0.9));
+    c.setLineDash([]);
+    // 가운데 제본선과 안쪽 그늘
+    const g = c.createLinearGradient(W / 2 - 40, 0, W / 2 + 40, 0);
+    g.addColorStop(0, "rgba(169,76,104,0)");
+    g.addColorStop(0.5, "rgba(169,76,104,0.16)");
+    g.addColorStop(1, "rgba(169,76,104,0)");
+    c.fillStyle = g;
+    c.fillRect(W / 2 - 40, 0, 80, H);
+    c.strokeStyle = "rgba(169,76,104,0.45)";
+    c.lineWidth = 2;
+    c.beginPath();
+    c.moveTo(W / 2, H * 0.2);
+    c.lineTo(W / 2, H * 0.97);
+    c.stroke();
   });
 }
 
@@ -327,15 +351,90 @@ function Chain({ color, charm }: { color: string; charm: string }) {
   );
 }
 
-function Book({ open, focus, flip, settings, titleFont, reducedMotion, topInset, onRects, onCoverClick }: Props) {
+function Door({ side, geo, mats, ribbonColor, refObj }: {
+  side: "left" | "right";
+  geo: ReturnType<typeof makeDoorGeo>;
+  mats: Record<string, THREE.Material>;
+  ribbonColor: string;
+  refObj: RefObject<THREE.Group | null>;
+}) {
+  const dx = side === "left" ? HINGE_X : -HINGE_X;
+  const [lkx, lky] = heartTo3D(0.5, 0.645);
+  const [rbx, rby] = heartTo3D(0.6, 0.79);
+  return (
+    <group ref={refObj} position={[side === "left" ? -HINGE_X : HINGE_X, 0, PAGE_Z + 0.005]}>
+      <mesh geometry={geo.cover} material={mats.leather} castShadow receiveShadow />
+      <mesh geometry={geo.decal} material={mats.decal} position={[0, 0.18, COVER_T + 0.009]} />
+      <mesh geometry={geo.inner} material={mats.paper} position={[0, 0, -0.03]} />
+      {geo.lace.map(([x, y], i) => (
+        <mesh key={i} material={mats.lace} position={[x, y, COVER_T - 0.01]} castShadow>
+          <sphereGeometry args={[0.045, 10, 8]} />
+        </mesh>
+      ))}
+      {side === "left" ? (
+        <>
+          {/* 양문을 잠그는 가죽 끈 + 금 하트 자물쇠 (가운데 이음새 위) */}
+          <mesh material={mats.strap} position={[lkx + dx, lky, COVER_T + 0.012]} castShadow>
+            <boxGeometry args={[0.6, 0.2, 0.03]} />
+          </mesh>
+          <mesh geometry={geo.lock} material={mats.gold} position={[lkx + dx, lky + 0.02, COVER_T + 0.03]} castShadow />
+        </>
+      ) : (
+        <Ribbon color={ribbonColor} position={[rbx + dx, rby, COVER_T + 0.06]} />
+      )}
+    </group>
+  );
+}
+
+function makeDoorGeo(side: "left" | "right") {
+  const dx = side === "left" ? HINGE_X : -HINGE_X;
+  const ext = (scale: number, depth: number) =>
+    fitUV(
+      new THREE.ExtrudeGeometry(heartShape(scale, side, dx), {
+        depth,
+        bevelEnabled: true,
+        bevelSize: 0.03,
+        bevelThickness: 0.025,
+        bevelSegments: 5,
+        curveSegments: 48,
+      }),
+      scale,
+      dx,
+    );
+  const flat = (scale: number) => fitUV(new THREE.ShapeGeometry(heartShape(scale, side, dx), 64), scale, dx);
+  const lock = (() => {
+    const s = new THREE.Shape();
+    s.moveTo(0, 0.05);
+    s.bezierCurveTo(0.025, 0.125, 0.125, 0.1, 0.12, 0.02);
+    s.bezierCurveTo(0.11, -0.05, 0.04, -0.09, 0, -0.125);
+    s.bezierCurveTo(-0.04, -0.09, -0.11, -0.05, -0.12, 0.02);
+    s.bezierCurveTo(-0.125, 0.1, -0.025, 0.125, 0, 0.05);
+    return new THREE.ExtrudeGeometry(s, { depth: 0.035, bevelEnabled: true, bevelSize: 0.014, bevelThickness: 0.018, bevelSegments: 3 });
+  })();
+  return {
+    cover: ext(DOOR_SCALE, COVER_T - 0.02),
+    decal: flat(0.72),
+    inner: flat(0.98),
+    lock,
+    lace: sampleHeart(140)
+      .filter(([u]) => (side === "left" ? u < 0.49 : u > 0.51))
+      .map(([u, v]) => {
+        const [x, y] = heartTo3D(u, v, 1.06);
+        return [x + dx, y] as [number, number];
+      }),
+  };
+}
+
+function Book({ open, flip, settings, titleFont, reducedMotion, insets, onRect, onCoverClick }: Props) {
   useEnvironment();
   const { camera, size } = useThree();
   const bookRef = useRef<THREE.Group>(null);
-  const coverRef = useRef<THREE.Group>(null);
+  const leftRef = useRef<THREE.Group>(null);
+  const rightRef = useRef<THREE.Group>(null);
   const flipRef = useRef<THREE.Group>(null);
-  const angle = useRef(0);
+  const angle = useRef(0); // 0 = 닫힘, 1 = 활짝 열림
   const flipState = useRef<{ t: number; dir: 1 | -1 } | null>(null);
-  const lastRects = useRef("");
+  const lastRect = useRef("");
   const [fontReady, setFontReady] = useState(0);
 
   useEffect(() => {
@@ -355,13 +454,13 @@ function Book({ open, focus, flip, settings, titleFont, reducedMotion, topInset,
         }),
         scale,
       );
-    const flat = (scale: number) => fitUV(new THREE.ShapeGeometry(heartShape(scale), 64), scale);
     return {
-      cover: ext(1.03, COVER_T - 0.02, true),
+      back: ext(DOOR_SCALE, COVER_T - 0.02, true),
       block: ext(0.995, BLOCK_T, false),
-      paper: flat(0.98),
-      decal: flat(0.74),
-      lace: sampleHeart(110).map(([u, v]) => heartTo3D(u, v, 1.06)),
+      paper: fitUV(new THREE.ShapeGeometry(heartShape(0.98), 64), 0.98),
+      leaf: fitUV(new THREE.ShapeGeometry(heartShape(0.975, "right"), 64), 0.975),
+      left: makeDoorGeo("left"),
+      right: makeDoorGeo("right"),
     };
   }, []);
 
@@ -376,9 +475,10 @@ function Book({ open, focus, flip, settings, titleFont, reducedMotion, topInset,
       decal: new THREE.MeshStandardMaterial({ map: decal, transparent: true, roughness: 0.6, polygonOffset: true, polygonOffsetFactor: -2 }),
       paperSide: new THREE.MeshStandardMaterial({ color: "#FBEFE2", roughness: 0.95 }),
       paper: new THREE.MeshStandardMaterial({ map: tex.paper, roughness: 0.9, side: THREE.DoubleSide }),
+      leaf: new THREE.MeshStandardMaterial({ color: "#FFF6EB", roughness: 0.9, side: THREE.DoubleSide }),
       lace: new THREE.MeshStandardMaterial({ color: "#FFFBF7", roughness: 0.7 }),
       gold: new THREE.MeshStandardMaterial({ color: "#D6B26E", metalness: 0.95, roughness: 0.25 }),
-      strap: new THREE.MeshStandardMaterial({ color: shade(settings.cover_color, -0.1), roughness: 0.6 }),
+      strap: new THREE.MeshStandardMaterial({ color: shade(settings.cover_color, -0.12), roughness: 0.6 }),
       table: new THREE.MeshStandardMaterial({ map: tex.table, roughness: 1 }),
     }),
     [leather, decal, tex, settings.cover_color],
@@ -388,69 +488,53 @@ function Book({ open, focus, flip, settings, titleFont, reducedMotion, topInset,
     if (flip) flipState.current = { t: 0, dir: flip.dir };
   }, [flip]);
 
-  const lockHeart = useMemo(() => {
-    const s = new THREE.Shape();
-    s.moveTo(0, 0.04);
-    s.bezierCurveTo(0.02, 0.1, 0.1, 0.08, 0.095, 0.015);
-    s.bezierCurveTo(0.09, -0.04, 0.03, -0.07, 0, -0.1);
-    s.bezierCurveTo(-0.03, -0.07, -0.09, -0.04, -0.095, 0.015);
-    s.bezierCurveTo(-0.1, 0.08, -0.02, 0.1, 0, 0.04);
-    return new THREE.ExtrudeGeometry(s, { depth: 0.03, bevelEnabled: true, bevelSize: 0.012, bevelThickness: 0.015, bevelSegments: 3 });
-  }, []);
-
   useFrame((state, dt) => {
     const d = Math.min(dt, 0.05);
-    const speed = reducedMotion ? 9 : 2.6;
-    const target = open ? -Math.PI : 0;
+    const speed = reducedMotion ? 9 : 2.4;
+    const target = open ? 1 : 0;
     angle.current += (target - angle.current) * Math.min(1, d * speed);
-    if (Math.abs(target - angle.current) < 0.002) angle.current = target;
-    if (coverRef.current) coverRef.current.rotation.y = angle.current;
+    if (Math.abs(target - angle.current) < 0.0015) angle.current = target;
+    // 왼쪽 문이 먼저, 오른쪽 문이 살짝 늦게 열린다 (자물쇠 끈이 왼쪽 문에 달려 있어서)
+    const a = angle.current;
+    const la = Math.min(1, a * 1.15), ra = Math.max(0, Math.min(1, (a - 0.08) * 1.1));
+    if (leftRef.current) leftRef.current.rotation.y = -DOOR_OPEN * la;
+    if (rightRef.current) rightRef.current.rotation.y = DOOR_OPEN * (open ? ra : Math.min(ra, la));
 
-    // 책 자세: 닫힘 → 살짝 비스듬히 떠 있는 3/4 뷰, 열림 → 정면
     const b = bookRef.current;
     if (b) {
       const k = Math.min(1, d * 3);
-      const tRot = open ? [0, 0, 0] : [-0.28, 0.3, 0.05];
+      const tRot = open ? [0, 0, 0] : [-0.3, 0.22, 0.04];
       b.rotation.x += (tRot[0] - b.rotation.x) * k;
       b.rotation.y += (tRot[1] - b.rotation.y) * k;
       b.rotation.z += (tRot[2] - b.rotation.z) * k;
-      const bob = open || reducedMotion ? 0 : Math.sin(state.clock.elapsedTime * 1.2) * 0.03;
+      const bob = open || reducedMotion ? 0 : Math.sin(state.clock.elapsedTime * 1.2) * 0.04;
       b.position.y += (bob - b.position.y) * k;
-      // 기울일 때 책이 탁자 아래로 파고들지 않도록 띄운다
-      const lift = open ? 0 : 0.62;
+      const lift = open ? 0 : 0.75;
       b.position.z += (lift - b.position.z) * k;
+      if (open && Math.abs(b.rotation.x) < 0.0005) b.rotation.set(0, 0, 0);
       if (open && Math.abs(b.position.z) < 0.0005) b.position.z = 0;
       if (open && Math.abs(b.position.y) < 0.0005) b.position.y = 0;
-      if (open && Math.abs(b.rotation.x) < 0.0005) b.rotation.set(0, 0, 0);
     }
 
-    // 카메라: 펼친 하트(또는 모바일은 한쪽 페이지)가 화면에 꽉 차도록
+    // 카메라: 펼친 하트가 위 메뉴바와 아래 트레이 사이에 꽉 차도록
     const cam = camera as THREE.PerspectiveCamera;
     const aspect = size.width / Math.max(1, size.height);
     const tanH = Math.tan(THREE.MathUtils.degToRad(cam.fov / 2));
-    const usableH = (size.height - topInset) / size.height;
-    let cx: number, needW: number, needH: number;
-    if (!open) {
-      cx = CX;
-      needW = PAGE_W * 1.7;
-      needH = PAGE_H * 1.65;
-    } else {
-      cx = focus === "both" ? 0 : focus === "left" ? -CX : CX;
-      needW = focus === "both" ? (CX + PAGE_W / 2) * 2 * 1.06 : PAGE_W * 1.08;
-      needH = PAGE_H * 1.08;
-    }
-    const dist = Math.max(needW / (2 * tanH * aspect), needH / (2 * tanH * usableH));
-    // 위쪽 메뉴바만큼 하트를 아래로 내려 보이게 카메라 y를 올린다
-    const cy = ((topInset / size.height) * 2 * tanH * dist) / 2;
-    const kc = Math.min(1, d * 3.2);
+    const usable = Math.max(0.3, (size.height - insets.top - insets.bottom) / size.height);
+    const needW = open ? HEART_W * 1.06 : HEART_W * 1.45;
+    const needH = open ? HEART_H * 1.04 : HEART_H * 1.3;
+    const dist = Math.max(needW / (2 * tanH * aspect), needH / (2 * tanH * usable));
+    const cy = ((insets.top - insets.bottom) / size.height) * tanH * dist;
+    // 화면 전환(아래 트레이 높이 변화)은 책장 넘김 시간 안에 끝나도록 빠르게 따라간다
+    const kc = Math.min(1, d * (open ? 7 : 3.2));
     const p = cam.position;
-    p.x += (cx - p.x) * kc;
+    p.x += (0 - p.x) * kc;
     p.y += (cy - p.y) * kc;
     p.z += (dist + PAGE_Z - p.z) * kc;
-    if (Math.abs(cx - p.x) + Math.abs(dist + PAGE_Z - p.z) < 0.001) p.set(cx, cy, dist + PAGE_Z);
+    if (Math.abs(p.x) + Math.abs(cy - p.y) + Math.abs(dist + PAGE_Z - p.z) < 0.004) p.set(0, cy, dist + PAGE_Z);
     cam.lookAt(p.x, p.y, 0);
 
-    // 책장 넘김
+    // 가운데 제본선을 축으로 반쪽 하트 종이가 넘어간다
     const fs = flipState.current;
     const fr = flipRef.current;
     if (fr) {
@@ -459,18 +543,18 @@ function Book({ open, focus, flip, settings, titleFont, reducedMotion, topInset,
         const e = fs.t < 0.5 ? 2 * fs.t * fs.t : 1 - Math.pow(-2 * fs.t + 2, 2) / 2;
         fr.visible = true;
         fr.rotation.y = fs.dir === 1 ? -Math.PI * e : -Math.PI * (1 - e);
-        fr.position.z = PAGE_Z + 0.004 + Math.sin(e * Math.PI) * 0.06;
-        fr.scale.x = 1 - Math.sin(e * Math.PI) * 0.08;
+        fr.position.z = PAGE_Z + 0.006 + Math.sin(e * Math.PI) * 0.12;
+        fr.scale.x = 1 - Math.sin(e * Math.PI) * 0.1;
         if (fs.t >= 1) flipState.current = null;
       } else fr.visible = false;
     }
 
-    // 펼쳐진 뒤 HTML 편집 레이어가 얹힐 화면 좌표 계산
-    const settled = open && angle.current === target && b && b.rotation.x === 0 && b.position.z === 0 && b.position.y === 0 && p.x === cx;
+    // 펼쳐진 뒤 HTML 편집 레이어가 얹힐 화면 좌표
+    const settled = open && a === 1 && b && b.rotation.x === 0 && b.position.z === 0 && b.position.y === 0 && p.y === cy;
     if (!settled) {
-      if (lastRects.current) {
-        lastRects.current = "";
-        onRects(null);
+      if (lastRect.current) {
+        lastRect.current = "";
+        onRect(null);
       }
       return;
     }
@@ -478,49 +562,43 @@ function Book({ open, focus, flip, settings, titleFont, reducedMotion, topInset,
       const v = new THREE.Vector3(x, y, PAGE_Z).project(cam);
       return [((v.x + 1) / 2) * size.width, ((1 - v.y) / 2) * size.height];
     };
-    const [rx0, ry0] = proj(CX - PAGE_W / 2, PAGE_H / 2);
-    const [rx1, ry1] = proj(CX + PAGE_W / 2, -PAGE_H / 2);
-    const [lx0] = proj(-CX - PAGE_W / 2, PAGE_H / 2);
-    const right = { x: rx0, y: ry0, w: rx1 - rx0, h: ry1 - ry0 };
-    const left = { x: lx0, y: ry0, w: rx1 - rx0, h: ry1 - ry0 };
-    const key = [right.x, right.y, right.w, left.x].map((n) => Math.round(n)).join(",");
-    if (key !== lastRects.current) {
-      lastRects.current = key;
-      onRects({ left, right });
+    const [x0, y0] = proj(-HEART_W / 2, HEART_H / 2);
+    const [x1, y1] = proj(HEART_W / 2, -HEART_H / 2);
+    const r = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+    const key = [r.x, r.y, r.w, r.h].map((n) => Math.round(n)).join(",");
+    if (key !== lastRect.current) {
+      lastRect.current = key;
+      onRect(r);
     }
   });
 
   const ribbonColor = RIBBON_COLORS[settings.ribbon_key] ?? RIBBON_COLORS.rose;
-  const [rbx, rby] = heartTo3D(0.5, 0.66);
-  const [lkx, lky] = heartTo3D(0.955, 0.52);
-  const [chx, chy] = heartTo3D(0.93, 0.1, 1.03);
-  const ringYs = [0.44, 0.31, 0.18].map((v) => heartTo3D(0, v)[1]);
+  const [chx, chy] = heartTo3D(0.965, 0.25, 1.03);
 
   return (
     <>
       <ambientLight intensity={0.15} />
       <hemisphereLight args={["#fff5f7", "#e9b6c4", 0.3]} />
       <directionalLight
-        position={[-3, 4, 6]}
+        position={[-3, 4, 7]}
         intensity={1.25}
         castShadow
         shadow-mapSize={[2048, 2048]}
-        shadow-camera-left={-4}
-        shadow-camera-right={4}
-        shadow-camera-top={3}
-        shadow-camera-bottom={-3}
+        shadow-camera-left={-6}
+        shadow-camera-right={6}
+        shadow-camera-top={4}
+        shadow-camera-bottom={-4}
         shadow-bias={-0.0004}
         shadow-radius={6}
       />
-      <pointLight position={[3, 2, 3]} intensity={3} color="#ffd9e2" />
+      <pointLight position={[3, 2, 4]} intensity={3} color="#ffd9e2" />
 
       <mesh position={[0, 0, -0.03]} material={mats.table} receiveShadow>
-        <planeGeometry args={[30, 20]} />
+        <planeGeometry args={[40, 26]} />
       </mesh>
 
-      <group ref={bookRef} position={[CX, 0, 0]}>
+      <group ref={bookRef}>
         <group
-          position={[-CX, 0, 0]}
           onClick={(e) => {
             e.stopPropagation();
             if (!open) onCoverClick();
@@ -528,43 +606,22 @@ function Book({ open, focus, flip, settings, titleFont, reducedMotion, topInset,
           onPointerOver={() => !open && (document.body.style.cursor = "pointer")}
           onPointerOut={() => (document.body.style.cursor = "")}
         >
-          {/* 뒤표지 */}
-          <mesh geometry={geo.cover} material={mats.leather} castShadow receiveShadow />
-          {/* 내지 묶음 (옆면 종이층) */}
+          {/* 뒤판 + 내지 묶음 */}
+          <mesh geometry={geo.back} material={mats.leather} castShadow receiveShadow />
           <mesh geometry={geo.block} material={[mats.paperSide, mats.paperSide]} position={[0, 0, COVER_T - 0.01]} castShadow receiveShadow />
           <mesh geometry={geo.paper} material={mats.paper} position={[0, 0, PAGE_Z + 0.001]} receiveShadow />
 
-          {/* 링 제본 */}
-          {ringYs.map((y, i) => (
-            <mesh key={i} material={mats.gold} position={[0, y, PAGE_Z / 2 + 0.02]} rotation={[Math.PI / 2, 0, 0]} castShadow>
-              <torusGeometry args={[0.15, 0.02, 12, 40]} />
-            </mesh>
-          ))}
+          {/* 양문형 앞표지 */}
+          <Door side="left" geo={geo.left} mats={mats} ribbonColor={ribbonColor} refObj={leftRef} />
+          <Door side="right" geo={geo.right} mats={mats} ribbonColor={ribbonColor} refObj={rightRef} />
 
-          {/* 앞표지: 힌지(x=0)를 축으로 회전 */}
-          <group ref={coverRef} position={[0, 0, PAGE_Z + 0.005]}>
-            <mesh geometry={geo.cover} material={mats.leather} castShadow receiveShadow />
-            <mesh geometry={geo.decal} material={mats.decal} position={[0, 0.12, COVER_T + 0.009]} />
-            <mesh geometry={geo.paper} material={mats.paper} position={[0, 0, -0.03]} />
-            {geo.lace.map(([x, y], i) => (
-              <mesh key={i} material={mats.lace} position={[x, y, COVER_T - 0.01]} castShadow>
-                <sphereGeometry args={[0.035, 10, 8]} />
-              </mesh>
-            ))}
-            <Ribbon color={ribbonColor} position={[rbx, rby, COVER_T + 0.06]} />
-            <mesh material={mats.strap} position={[lkx - 0.04, lky, COVER_T + 0.01]} castShadow>
-              <boxGeometry args={[0.32, 0.16, 0.03]} />
-            </mesh>
-            <mesh geometry={lockHeart} material={mats.gold} position={[lkx + 0.02, lky + 0.01, COVER_T + 0.025]} castShadow />
-          </group>
-
-          {/* 책장 넘김용 종이 */}
-          <group ref={flipRef} position={[0, 0, PAGE_Z + 0.004]} visible={false}>
-            <mesh geometry={geo.paper} material={mats.paper} castShadow />
+          {/* 책장 넘김용 반쪽 하트 종이 (가운데 x=0이 축) */}
+          <group ref={flipRef} position={[0, 0, PAGE_Z + 0.006]} visible={false}>
+            <mesh geometry={geo.leaf} material={mats.leaf} castShadow />
           </group>
 
           {settings.chain_key !== "none" && (
-            <group position={[chx, chy, PAGE_Z + 0.12]}>
+            <group position={[chx, chy, PAGE_Z + 0.14]}>
               <Chain color={CHAIN_COLORS[settings.chain_key] ?? CHAIN_COLORS.gold} charm={settings.charm_key} />
             </group>
           )}
@@ -579,7 +636,7 @@ export default function HeartBook3D(props: Props) {
     <Canvas
       shadows
       dpr={[1, 2]}
-      camera={{ fov: 32, position: [CX, 0, 7], near: 0.1, far: 60 }}
+      camera={{ fov: 32, position: [0, 0, 9], near: 0.1, far: 80 }}
       gl={{ antialias: true, preserveDrawingBuffer: false }}
       onCreated={({ gl }) => {
         gl.toneMapping = THREE.NeutralToneMapping;

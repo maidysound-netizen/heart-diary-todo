@@ -50,4 +50,12 @@ CREATE TABLE IF NOT EXISTS diary_settings (
   hub_layout JSONB,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+CREATE TABLE IF NOT EXISTS music_links (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  url VARCHAR(500) NOT NULL,
+  title VARCHAR(120) NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS music_owner ON music_links (owner_id, created_at);
 `;
