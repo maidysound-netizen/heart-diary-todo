@@ -1,0 +1,44 @@
+{
+  "templates": [
+    {
+      "id": "01_blank",
+      "label": "Blank",
+      "asset": "/templates/01_blank.png"
+    },
+    {
+      "id": "02_lined",
+      "label": "Lined",
+      "asset": "/templates/02_lined.png"
+    },
+    {
+      "id": "03_grid",
+      "label": "Grid",
+      "asset": "/templates/03_grid.png"
+    },
+    {
+      "id": "04_dots",
+      "label": "Dots",
+      "asset": "/templates/04_dots.png"
+    },
+    {
+      "id": "05_daily",
+      "label": "Daily",
+      "asset": "/templates/05_daily.png"
+    },
+    {
+      "id": "06_todo",
+      "label": "Todo",
+      "asset": "/templates/06_todo.png"
+    },
+    {
+      "id": "07_weekly",
+      "label": "Weekly",
+      "asset": "/templates/07_weekly.png"
+    },
+    {
+      "id": "08_monthly",
+      "label": "Monthly",
+      "asset": "/templates/08_monthly.png"
+    }
+  ]
+}
