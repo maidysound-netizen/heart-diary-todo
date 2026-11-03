@@ -125,6 +125,9 @@ export function DrawingBoard({
   const [, bump] = useState(0);
   const boxRef = useRef<HTMLDivElement>(null);
   const cvRef = useRef<HTMLCanvasElement>(null);
+  /** 지금 긋고 있는 선만 그리는 위 캔버스 (저장된 선 전체를 매번 다시 그리지 않도록) */
+  const liveRef = useRef<HTMLCanvasElement>(null);
+  const raf = useRef(0);
   const fileRef = useRef<HTMLInputElement>(null);
   const live = useRef<Stroke | null>(null);
   const erased = useRef<Set<string> | null>(null);
@@ -156,15 +159,16 @@ export function DrawingBoard({
 
   // CSS 크기·DPR이 바뀌면 캔버스 해상도를 다시 맞추고 정규화 좌표로 다시 그린다
   useLayoutEffect(() => {
-    const box = boxRef.current, cv = cvRef.current;
-    if (!box || !cv) return;
+    const box = boxRef.current, cv = cvRef.current, lv = liveRef.current;
+    if (!box || !cv || !lv) return;
     const fit = () => {
-      const r = box.getBoundingClientRect();
-      const dpr = Math.min(window.devicePixelRatio || 1, 3);
+      // 오래된 태블릿에서도 가볍게: 화면 배율은 최대 2배까지만
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
       dims.current = { w: box.clientWidth, h: box.clientHeight, dpr };
-      cv.width = Math.max(1, Math.round(box.clientWidth * dpr));
-      cv.height = Math.max(1, Math.round(box.clientHeight * dpr));
-      void r;
+      for (const c of [cv, lv]) {
+        c.width = Math.max(1, Math.round(box.clientWidth * dpr));
+        c.height = Math.max(1, Math.round(box.clientHeight * dpr));
+      }
       redraw(snapRef.current.strokes);
     };
     fit();
@@ -173,7 +177,15 @@ export function DrawingBoard({
     return () => ro.disconnect();
   }, [redraw]);
 
-  useEffect(() => redraw(snap.strokes), [snap.strokes, redraw]);
+  // 선을 하나 더한 경우는 이미 그려 두었으니 전체를 다시 그리지 않는다
+  const skipRedraw = useRef(false);
+  useEffect(() => {
+    if (skipRedraw.current) {
+      skipRedraw.current = false;
+      return;
+    }
+    redraw(snap.strokes);
+  }, [snap.strokes, redraw]);
 
   useEffect(() => {
     if (autoPhoto) setTimeout(() => fileRef.current?.click(), 300);
@@ -187,13 +199,36 @@ export function DrawingBoard({
 
   const aspect = () => (dims.current.h > 1 ? dims.current.w / dims.current.h : DEFAULT_ASPECT);
 
+  /** 그리기는 화면 한 프레임에 한 번만 (펜 신호가 아무리 많이 와도) */
+  const schedule = (fn: () => void) => {
+    cancelAnimationFrame(raf.current);
+    raf.current = requestAnimationFrame(fn);
+  };
+
+  const paintLive = () => {
+    const lv = liveRef.current, s = live.current;
+    if (!lv) return;
+    const c = lv.getContext("2d")!;
+    const { w, h, dpr } = dims.current;
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c.clearRect(0, 0, w, h);
+    if (s) drawStroke(c, s, w, h);
+  };
+
   const eraseAt = (x: number, y: number) => {
     const rad = 0.025;
+    let hit = false;
     for (const s of snapRef.current.strokes) {
       if (erased.current!.has(s.id)) continue;
-      if (s.pts.some(([px, py]) => Math.hypot(px - x, (py - y) / aspect()) < rad)) erased.current!.add(s.id);
+      if (s.pts.some(([px, py]) => Math.hypot(px - x, (py - y) / aspect()) < rad)) {
+        erased.current!.add(s.id);
+        hit = true;
+      }
     }
-    redraw(snapRef.current.strokes, erased.current!);
+    if (hit) {
+      const gone = erased.current!;
+      schedule(() => redraw(snapRef.current.strokes, gone));
+    }
   };
 
   const onDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -242,11 +277,7 @@ export function DrawingBoard({
       if (Math.abs(last[0] - x) + Math.abs(last[1] - y) < 0.0008) continue;
       s.pts.push([+x.toFixed(4), +y.toFixed(4), +(ev.pointerType === "pen" ? ev.pressure || 0.5 : 0.5).toFixed(2)]);
     }
-    redraw(snapRef.current.strokes);
-    const { w, h, dpr } = dims.current;
-    const c = cvRef.current!.getContext("2d")!;
-    c.setTransform(dpr, 0, 0, dpr, 0, 0);
-    drawStroke(c, s, w, h);
+    schedule(paintLive);
   };
 
   const onUp = () => {
@@ -259,7 +290,19 @@ export function DrawingBoard({
     const s = live.current;
     live.current = null;
     onBusy?.(false);
-    if (s) commit({ ...snapRef.current, strokes: [...snapRef.current.strokes, s] });
+    cancelAnimationFrame(raf.current);
+    if (s) {
+      // 다 그은 선을 아래 캔버스에 한 번 얹고 위 캔버스는 비운다
+      const c = cvRef.current?.getContext("2d");
+      if (c) {
+        const { w, h, dpr } = dims.current;
+        c.setTransform(dpr, 0, 0, dpr, 0, 0);
+        drawStroke(c, s, w, h);
+      }
+      paintLive();
+      skipRedraw.current = true;
+      commit({ ...snapRef.current, strokes: [...snapRef.current.strokes, s] });
+    }
   };
 
   const maxZ = (kind: PageItem["kind"]) =>
@@ -479,6 +522,7 @@ export function DrawingBoard({
           onPointerUp={onUp}
           onPointerCancel={onUp}
         />
+        <canvas ref={liveRef} className="board-canvas live" aria-hidden="true" />
         {snap.items.map((it) => (
           <div
             key={it.id}

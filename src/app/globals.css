@@ -1479,7 +1479,6 @@ button:disabled {
 }
 .hub-inert {
   pointer-events: none;
-  filter: saturate(0.85);
 }
 .hub-tools {
   display: flex;
@@ -1509,8 +1508,7 @@ button:disabled {
 .paper-backdrop {
   position: absolute;
   inset: 0;
-  background: radial-gradient(circle at 50% 45%, #fff3f633, #a94c6840);
-  backdrop-filter: blur(2px);
+  background: radial-gradient(circle at 50% 45%, #fff3f655, #a94c6855);
   animation: fadeIn 0.3s ease-out;
 }
 @keyframes fadeIn {
@@ -1890,4 +1888,7 @@ button:disabled {
 }
 .note-line .line-edit input {
   font-size: 1em;
+}
+.board-canvas.live {
+  pointer-events: none !important;
 }

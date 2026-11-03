@@ -21,6 +21,8 @@ type Props = {
   onCoverClick: () => void;
 };
 
+/** 터치 기기(태블릿·폰)는 해상도·그림자를 낮춰 가볍게 */
+const COARSE = typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
 const COVER_T = 0.05; // 표지 두께
 const BLOCK_T = 0.16; // 내지 묶음 두께
 const PAGE_Z = COVER_T + BLOCK_T; // 내지 윗면 높이
@@ -427,7 +429,7 @@ function makeDoorGeo(side: "left" | "right") {
 
 function Book({ open, flip, settings, titleFont, reducedMotion, insets, onRect, onCoverClick }: Props) {
   useEnvironment();
-  const { camera, size } = useThree();
+  const { camera, size, invalidate } = useThree();
   const bookRef = useRef<THREE.Group>(null);
   const leftRef = useRef<THREE.Group>(null);
   const rightRef = useRef<THREE.Group>(null);
@@ -487,6 +489,9 @@ function Book({ open, flip, settings, titleFont, reducedMotion, insets, onRect, 
   useEffect(() => {
     if (flip) flipState.current = { t: 0, dir: flip.dir };
   }, [flip]);
+
+  // 필요할 때만 다시 그린다 (펼쳐져 멈춰 있으면 3D는 쉬고 펜 그리기에 힘을 몰아준다)
+  useEffect(() => invalidate(), [open, flip, insets.top, insets.bottom, settings, size.width, size.height, invalidate]);
 
   useFrame((state, dt) => {
     const d = Math.min(dt, 0.05);
@@ -556,8 +561,10 @@ function Book({ open, flip, settings, titleFont, reducedMotion, insets, onRect, 
         lastRect.current = "";
         onRect(null);
       }
+      invalidate();
       return;
     }
+    if (flipState.current) invalidate();
     const proj = (x: number, y: number) => {
       const v = new THREE.Vector3(x, y, PAGE_Z).project(cam);
       return [((v.x + 1) / 2) * size.width, ((1 - v.y) / 2) * size.height];
@@ -583,7 +590,7 @@ function Book({ open, flip, settings, titleFont, reducedMotion, insets, onRect, 
         position={[-3, 4, 7]}
         intensity={1.25}
         castShadow
-        shadow-mapSize={[2048, 2048]}
+        shadow-mapSize={COARSE ? [1024, 1024] : [2048, 2048]}
         shadow-camera-left={-6}
         shadow-camera-right={6}
         shadow-camera-top={4}
@@ -635,7 +642,8 @@ export default function HeartBook3D(props: Props) {
   return (
     <Canvas
       shadows
-      dpr={[1, 2]}
+      dpr={COARSE ? [1, 1.5] : [1, 2]}
+      frameloop="demand"
       camera={{ fov: 32, position: [0, 0, 9], near: 0.1, far: 80 }}
       gl={{ antialias: true, preserveDrawingBuffer: false }}
       onCreated={({ gl }) => {
