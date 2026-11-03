@@ -5,7 +5,16 @@ import { useApp } from "../DiaryApp";
 import { At, Paper } from "../Paper";
 import { api, type Settings } from "@/lib/client";
 
-const COVERS = ["#E8A6B5", "#F4C2CF", "#C9B3E6", "#A9D3C4", "#F6D58E", "#A94C68"];
+const COVERS: [string, string][] = [
+  ["#E8A6B5", "로즈 핑크"],
+  ["#F4C2CF", "연핑크"],
+  ["#C9B3E6", "라일락"],
+  ["#B5E8D5", "민트"],
+  ["#BFDDF5", "베이비 블루"],
+  ["#A9D3C4", "세이지"],
+  ["#F6D58E", "버터"],
+  ["#A94C68", "체리"],
+];
 const RIBBONS: [string, string, string][] = [["rose", "로즈", "#E58FA5"], ["cream", "크림", "#FFF1E0"], ["lilac", "라일락", "#C9B3E6"], ["cherry", "체리", "#A94C68"]];
 const CHAINS: [string, string][] = [["gold", "금색 체인"], ["silver", "은색 체인"], ["none", "체인 없음"]];
 const CHARMS: [string, string][] = [["heart", "하트 크리스털"], ["bunny", "토끼 인형"], ["bear", "곰 인형"], ["star", "금별"]];
@@ -63,8 +72,8 @@ export function DecorateView() {
           <h2 className="hand center">표지 꾸미기</h2>
           <fieldset className="opt-group">
             <legend>표지 가죽 색</legend>
-            {COVERS.map((c) => (
-              <button key={c} className={`swatch lg ${settings.cover_color === c ? "on" : ""}`} style={{ background: c }} onClick={() => set({ cover_color: c })} aria-label={`표지 색 ${c}`} aria-pressed={settings.cover_color === c} />
+            {COVERS.map(([c, name]) => (
+              <button key={c} className={`swatch lg ${settings.cover_color === c ? "on" : ""}`} style={{ background: c }} onClick={() => set({ cover_color: c })} aria-label={`표지 색 ${name}`} title={name} aria-pressed={settings.cover_color === c} />
             ))}
           </fieldset>
           {group("리본", RIBBONS, settings.ribbon_key, (v) => set({ ribbon_key: v }))}
