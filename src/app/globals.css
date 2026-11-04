@@ -1008,6 +1008,14 @@ button:disabled {
   inset: -10px;
   border-radius: 50%;
 }
+.handle.box {
+  width: 34px;
+  height: 14px;
+  border-radius: 7px;
+  background: #fff;
+  border: 2.5px solid var(--cherry);
+  cursor: move;
+}
 .handle.rot {
   cursor: grab;
   color: #fff;

@@ -399,7 +399,7 @@ export function DrawingBoard({
   const grab = tool === "select" || tool === "hand";
   const drag = useRef<{
     id: string;
-    mode: "move" | "resize" | "rotate";
+    mode: "move" | "resize" | "rotate" | "box";
     sx: number;
     sy: number;
     start: PageItem;
@@ -408,7 +408,9 @@ export function DrawingBoard({
     cx: number;
     cy: number;
   } | null>(null);
-  const onItemDown = (e: React.PointerEvent, it: PageItem, mode: "move" | "resize" | "rotate") => {
+  const onItemDown = (e: React.PointerEvent, it: PageItem, mode0: "move" | "resize" | "rotate" | "box") => {
+    // Shift를 누른 채 모서리를 끌면 글자 크기는 그대로 두고 상자만 늘이고 줄인다
+    const mode = mode0 === "resize" && e.shiftKey ? "box" : mode0;
     if (tool === "text" && it.kind === "text" && mode === "move") {
       e.stopPropagation();
       editOnUp.current = it.id;
@@ -447,6 +449,10 @@ export function DrawingBoard({
     }
     const [x, y] = toLocal(e);
     const dx = x - d.sx, dy = y - d.sy;
+    if (d.mode === "box") {
+      update(d.id, { w: Math.min(1.2, Math.max(0.05, d.start.w + dx)), h: Math.min(1.2, Math.max(0.04, d.start.h + dy)) }, false);
+      return;
+    }
     if (d.mode === "move") {
       update(d.id, { x: Math.min(0.98, Math.max(-0.2, d.start.x + dx)), y: Math.min(0.98, Math.max(-0.2, d.start.y + dy)) }, false);
     } else {
@@ -597,6 +603,9 @@ export function DrawingBoard({
           ⟳
         </span>
         <span className="handle" style={at(hw, hh)} onPointerDown={(e) => onItemDown(e, selItem, "resize")} {...pp} title="크기" />
+        {selItem.kind === "text" && (
+          <span className="handle box" style={at(0, hh + 4)} onPointerDown={(e) => onItemDown(e, selItem, "box")} {...pp} title="글상자 넓이만 (Shift+모서리 끌기도 같아요)" />
+        )}
       </>,
       document.body,
     );
