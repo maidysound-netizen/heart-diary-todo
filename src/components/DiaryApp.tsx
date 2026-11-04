@@ -138,6 +138,9 @@ export default function DiaryApp({
                   <button className="btn-ghost" type="submit">테스트 계정으로 입장</button>
                 </form>
               )}
+              <p className="legal-links">
+                <a href="/privacy">개인정보처리방침</a> · <a href="/terms">서비스 약관</a>
+              </p>
             </div>
           </div>
         )}

@@ -2193,3 +2193,43 @@ img {
     display: none;
   }
 }
+
+/* 개인정보처리방침 · 약관 */
+.legal {
+  position: fixed;
+  inset: 0;
+  overflow: auto;
+  padding: 32px 16px 48px;
+}
+.legal article {
+  max-width: 680px;
+  margin: 0 auto;
+  background: var(--cream);
+  border: 2px solid var(--line);
+  border-radius: 20px;
+  padding: 24px 28px;
+  line-height: 1.7;
+  font-size: 15px;
+}
+.legal h1 {
+  font-family: var(--font-hand), var(--font-body);
+  color: var(--cherry);
+  margin: 16px 0 4px;
+}
+.legal h2 {
+  font-size: 17px;
+  margin: 24px 0 6px;
+  color: var(--cherry);
+}
+.legal ul {
+  padding-left: 20px;
+  margin: 6px 0;
+}
+.legal-links {
+  margin: 16px 0 0;
+  font-size: 13px;
+  text-align: center;
+}
+.legal-links a {
+  color: var(--ink-2);
+}
