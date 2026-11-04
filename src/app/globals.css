@@ -931,6 +931,7 @@ button:disabled {
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
+  container-type: inline-size;
 }
 .board-canvas {
   position: absolute;
@@ -986,15 +987,34 @@ button:disabled {
   outline: 1.5px solid var(--rose);
 }
 .handle {
-  position: absolute;
-  right: -0.6em;
-  bottom: -0.6em;
-  width: 1.2em;
-  height: 1.2em;
+  position: fixed;
+  z-index: 60;
+  width: 28px;
+  height: 28px;
+  transform: translate(-50%, -50%);
   border-radius: 50%;
   background: var(--cherry);
   border: 2px solid #fff;
+  box-shadow: 0 1px 5px #0005;
   cursor: nwse-resize;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+/* 손가락으로 잡기 쉽게 보이지 않는 터치 영역을 넓힘 */
+.handle::before {
+  content: "";
+  position: absolute;
+  inset: -10px;
+  border-radius: 50%;
+}
+.handle.rot {
+  cursor: grab;
+  color: #fff;
+  font-size: 16px;
+  line-height: 24px;
+  text-align: center;
+  font-weight: 700;
 }
 .sel-tools {
   display: flex;
@@ -2026,6 +2046,20 @@ img {
 }
 .todo-app .paper-tools {
   border-style: solid;
+  position: relative;
+}
+/* 선택 메뉴는 도구막대 위에 떠서 종이가 들썩이지 않게 */
+.todo-app .paper-tools .sel-tools {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  margin: 0 0 8px;
+  pointer-events: none;
+}
+.todo-app .paper-tools .sel-tools button {
+  pointer-events: auto;
+  box-shadow: 0 2px 8px #a94c6833;
 }
 
 /* 잔소리 토끼 */

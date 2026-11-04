@@ -95,6 +95,8 @@ export type PageItem = {
   src?: string;
   text?: string;
   color?: string;
+  /** 글상자 글자 크기 (보드 너비 대비 비율) */
+  fs?: number;
 };
 export type PageLayout = { v: 1; items: PageItem[] };
 

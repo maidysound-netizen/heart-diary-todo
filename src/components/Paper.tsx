@@ -113,7 +113,7 @@ export function Paper({
   const decor = useDecor(decorKey);
   const decorState = { "": "", saving: "저장 중…", saved: "자동 저장됨 ♡", error: "저장 실패" }[decor.state];
 
-  const frame = (boardNode: ReactNode, toolbar: ReactNode) => (
+  const frame = (boardNode: ReactNode, toolbar: ReactNode, selTools?: ReactNode) => (
     <section className="paper-stage" aria-label={label}>
       <div className="clipboard">
         <span className="clip" aria-hidden="true" />
@@ -130,6 +130,7 @@ export function Paper({
           {toolbar}
           <span className="save-state">{decorState}</span>
         </div>
+        {selTools}
       </div>
     </section>
   );
@@ -138,7 +139,7 @@ export function Paper({
 
   return (
     <DrawingBoard key={decorKey} fill handTool strokes={decor.data.strokes} items={decor.data.items} onChange={decor.onChange} initialTool={defaultTool}>
-      {({ toolbar, board: boardNode }) => frame(boardNode, toolbar)}
+      {({ toolbar, board: boardNode, selTools }) => frame(boardNode, toolbar, selTools)}
     </DrawingBoard>
   );
 }

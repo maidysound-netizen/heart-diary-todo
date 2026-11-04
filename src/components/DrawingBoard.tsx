@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { flushSync } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 import { Sticker } from "./art";
 import { StickerPicker, type Gif } from "./StickerPicker";
 import { api, ApiError, uid, type PageItem, type Stroke } from "@/lib/client";
@@ -289,7 +289,7 @@ export function DrawingBoard({
       const [x, y] = ta;
       let id = "";
       flushSync(() => {
-        id = addItem({ kind: "text", text: "", color, x: Math.min(x, 0.8), y: Math.max(0, y - 0.02), w: Math.max(0.15, Math.min(0.6, 0.95 - x)), h: 0.07 }, true).id;
+        id = addItem({ kind: "text", text: "", color, x: Math.min(x, 0.8), y: Math.max(0, y - 0.02), w: Math.max(0.15, Math.min(0.32, 0.95 - x)), h: 0.07 }, true).id;
         setEditing(id);
       });
       boxRef.current?.querySelector<HTMLTextAreaElement>(`[data-item="${id}"] textarea`)?.focus();
@@ -395,33 +395,69 @@ export function DrawingBoard({
     });
   };
 
-  // 개체 끌기/크기 조절 (선택 도구)
-  const drag = useRef<{ id: string; mode: "move" | "resize"; sx: number; sy: number; start: PageItem; before: Snapshot } | null>(null);
-  const onItemDown = (e: React.PointerEvent, it: PageItem, mode: "move" | "resize") => {
-    if (tool === "text" && it.kind === "text") {
+  // 개체 끌기/크기·각도 조절 — 선택 도구뿐 아니라 기본 손 도구에서도 바로 된다
+  const grab = tool === "select" || tool === "hand";
+  const drag = useRef<{
+    id: string;
+    mode: "move" | "resize" | "rotate";
+    sx: number;
+    sy: number;
+    start: PageItem;
+    before: Snapshot;
+    fs0: number;
+    cx: number;
+    cy: number;
+  } | null>(null);
+  const onItemDown = (e: React.PointerEvent, it: PageItem, mode: "move" | "resize" | "rotate") => {
+    if (tool === "text" && it.kind === "text" && mode === "move") {
       e.stopPropagation();
       editOnUp.current = it.id;
       return;
     }
-    if (tool !== "select" || editing === it.id) return;
+    if (!grab || editing === it.id) return;
     e.stopPropagation();
     e.preventDefault();
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     setSel(it.id);
     const [sx, sy] = toLocal(e);
-    drag.current = { id: it.id, mode, sx, sy, start: it, before: snapRef.current };
+    const el = boxRef.current?.querySelector<HTMLElement>(`[data-item="${it.id}"]`);
+    const r = el?.getBoundingClientRect();
+    let fs0 = it.fs ?? 0;
+    if (!fs0 && it.kind === "text") {
+      const body = el?.querySelector<HTMLElement>(".text-body");
+      const bw = boxRef.current?.clientWidth || 1;
+      fs0 = body ? parseFloat(getComputedStyle(body).fontSize) / bw : 0.04;
+    }
+    drag.current = {
+      id: it.id, mode, sx, sy, start: it, before: snapRef.current, fs0,
+      cx: r ? r.left + r.width / 2 : 0,
+      cy: r ? r.top + r.height / 2 : 0,
+    };
   };
   const onItemMove = (e: React.PointerEvent) => {
     const d = drag.current;
     if (!d) return;
+    if (d.mode === "rotate") {
+      let deg = (Math.atan2(e.clientY - d.cy, e.clientX - d.cx) * 180) / Math.PI + 90;
+      deg = ((deg + 540) % 360) - 180;
+      const snapTo = Math.round(deg / 45) * 45;
+      if (Math.abs(deg - snapTo) < 4) deg = snapTo; // 반듯한 각도에 살짝 붙음
+      update(d.id, { rot: Math.round(deg) }, false);
+      return;
+    }
     const [x, y] = toLocal(e);
     const dx = x - d.sx, dy = y - d.sy;
     if (d.mode === "move") {
       update(d.id, { x: Math.min(0.98, Math.max(-0.2, d.start.x + dx)), y: Math.min(0.98, Math.max(-0.2, d.start.y + dy)) }, false);
     } else {
-      const w = Math.max(0.05, d.start.w + dx);
-      const k = d.start.kind === "text" ? 1 : w / d.start.w;
-      update(d.id, { w, h: d.start.kind === "text" ? Math.max(0.08, d.start.h + dy) : d.start.h * k }, false);
+      // 모서리를 끌면 비율 그대로 커지고 작아짐 — 글상자는 글자 크기도 같이
+      const w = Math.min(1.2, Math.max(0.05, d.start.w + dx));
+      const k = w / d.start.w;
+      if (d.start.kind === "text") {
+        const fs = Math.min(0.2, Math.max(0.012, d.fs0 * k));
+        const kk = fs / d.fs0;
+        update(d.id, { w: d.start.w * kk, h: d.start.h * kk, fs }, false);
+      } else update(d.id, { w, h: d.start.h * k }, false);
     }
   };
   const onItemUp = () => {
@@ -524,6 +560,48 @@ export function DrawingBoard({
       </div>
   );
 
+  // 스크롤·화면 크기가 바뀌면 바깥 층 손잡이 위치를 다시 계산
+  useEffect(() => {
+    if (!sel || !grab) return;
+    const re = () => bump((n) => n + 1);
+    // 개체·손잡이·선택 메뉴 밖을 누르면 선택 해제 (손 도구에서는 빈 곳이 아래 층이라 보드가 못 받음)
+    const off = (e: PointerEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t?.closest("[data-item], .handle, .sel-tools, .board-tools")) return;
+      setSel(null);
+    };
+    document.addEventListener("pointerdown", off, true);
+    window.addEventListener("scroll", re, true);
+    window.addEventListener("resize", re);
+    return () => {
+      window.removeEventListener("scroll", re, true);
+      window.removeEventListener("resize", re);
+      document.removeEventListener("pointerdown", off, true);
+    };
+  }, [sel, grab]);
+
+  // 선택 손잡이는 하트 모양으로 잘리지 않게 화면 맨 위 층(body)에 따로 그린다
+  let handles: ReactNode = null;
+  const selItem = sel ? snap.items.find((i) => i.id === sel) : undefined;
+  const br = boxRef.current?.getBoundingClientRect();
+  if (selItem && grab && editing !== selItem.id && br && typeof document !== "undefined") {
+    const cx = br.left + (selItem.x + selItem.w / 2) * br.width;
+    const cy = br.top + (selItem.y + selItem.h / 2) * br.height;
+    const hw = (selItem.w * br.width) / 2, hh = (selItem.h * br.height) / 2;
+    const a = (selItem.rot * Math.PI) / 180, cos = Math.cos(a), sin = Math.sin(a);
+    const at = (dx: number, dy: number) => ({ left: cx + dx * cos - dy * sin, top: cy + dx * sin + dy * cos });
+    const pp = { onPointerMove: onItemMove, onPointerUp: onItemUp, onPointerCancel: onItemUp };
+    handles = createPortal(
+      <>
+        <span className="handle rot" style={at(0, -hh - 30)} onPointerDown={(e) => onItemDown(e, selItem, "rotate")} {...pp} title="돌리기">
+          ⟳
+        </span>
+        <span className="handle" style={at(hw, hh)} onPointerDown={(e) => onItemDown(e, selItem, "resize")} {...pp} title="크기" />
+      </>,
+      document.body,
+    );
+  }
+
   const board = (
       <div
         ref={boxRef}
@@ -555,7 +633,7 @@ export function DrawingBoard({
               height: `${it.h * 100}%`,
               transform: `rotate(${it.rot}deg)`,
               zIndex: it.z,
-              pointerEvents: tool === "select" || (tool === "text" && it.kind === "text") ? "auto" : "none",
+              pointerEvents: grab || (tool === "text" && it.kind === "text") ? "auto" : "none",
             }}
             onPointerDown={(e) => onItemDown(e, it, "move")}
             onPointerMove={onItemMove}
@@ -573,7 +651,7 @@ export function DrawingBoard({
                     if (el && document.activeElement !== el) requestAnimationFrame(() => el.focus());
                   }}
                   defaultValue={it.text}
-                  style={{ color: it.color }}
+                  style={{ color: it.color, fontSize: it.fs ? `${it.fs * 100}cqw` : undefined }}
                   placeholder="글을 써 보세요"
                   maxLength={500}
                   onPointerDown={(e) => e.stopPropagation()}
@@ -584,21 +662,17 @@ export function DrawingBoard({
                   }}
                 />
               ) : (
-                <div className="text-body" style={{ color: it.color }}>
+                <div className="text-body" style={{ color: it.color, fontSize: it.fs ? `${it.fs * 100}cqw` : undefined }}>
                   {it.text}
                 </div>
               ))}
-            {sel === it.id && tool === "select" && editing !== it.id && (
-              <>
-                <span className="handle" onPointerDown={(e) => onItemDown(e, it, "resize")} onPointerMove={onItemMove} onPointerUp={onItemUp} aria-hidden="true" />
-              </>
-            )}
           </div>
         ))}
+        {handles}
       </div>
   );
 
-  const selTools = selected && tool === "select" && (
+  const selTools = selected && grab && (
         <div className="sel-tools">
           <button onClick={() => reorder(selected.id, 1)}>앞으로</button>
           <button onClick={() => reorder(selected.id, -1)}>뒤로</button>
