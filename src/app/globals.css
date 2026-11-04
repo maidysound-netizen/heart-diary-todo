@@ -2233,3 +2233,86 @@ img {
 .legal-links a {
   color: var(--ink-2);
 }
+
+/* 스티커 고르기 (모모 스티커팩 + GIPHY) */
+.sticker-pop.picker {
+  display: block;
+  width: min(300px, calc(100vw - 24px));
+  padding: 8px;
+  font-size: 13px;
+}
+.picker-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+.sticker-pop .picker-tabs button {
+  width: auto;
+  height: auto;
+  flex: 1;
+  padding: 5px 8px;
+  border-radius: 999px;
+  border: 1.5px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+}
+.sticker-pop .picker-tabs button.on {
+  background: var(--rose);
+  border-color: var(--rose);
+  color: #fff;
+}
+.picker-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 2px;
+}
+.sticker-pop .picker-grid button {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+}
+.picker-search {
+  width: 100%;
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font: inherit;
+  margin-bottom: 6px;
+}
+.picker-gifs {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  max-height: 220px;
+  overflow: auto;
+}
+.sticker-pop .picker-gifs button {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  padding: 2px;
+  background: repeating-conic-gradient(#f7eef1 0 25%, #fff 0 50%) 0 0 / 12px 12px;
+}
+.picker-gifs img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.picker-gifs p {
+  grid-column: 1 / -1;
+  margin: 8px 0;
+  text-align: center;
+}
+.giphy-credit {
+  margin: 6px 0 0;
+  text-align: right;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+.item-sticker img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}

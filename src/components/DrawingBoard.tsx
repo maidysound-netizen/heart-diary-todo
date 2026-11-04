@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
-import { STICKERS, Sticker } from "./art";
+import { Sticker } from "./art";
+import { StickerPicker, type Gif } from "./StickerPicker";
 import { api, ApiError, uid, type PageItem, type Stroke } from "@/lib/client";
 
 export type Tool = "hand" | "pen" | "hl" | "eraser" | "text" | "select";
@@ -335,6 +336,13 @@ export function DrawingBoard({
     addItem({ kind: "sticker", key, x: 0.42 + Math.random() * 0.1, y: 0.35 + Math.random() * 0.1, w, h: w * aspect(), rot: Math.round(Math.random() * 20 - 10) });
   };
 
+  /** GIPHY 스티커는 이미지 주소만 저장한다 (파일을 따로 보관하지 않음) */
+  const addGif = (g: Gif) => {
+    setPalette(false);
+    const w = 0.2;
+    addItem({ kind: "sticker", src: g.url, x: 0.4 + Math.random() * 0.1, y: 0.35 + Math.random() * 0.1, w, h: w * aspect() * (g.h / g.w), rot: Math.round(Math.random() * 16 - 8) });
+  };
+
   const onPhoto = async (file: File | undefined) => {
     if (!file) return;
     if (!/^image\/(jpeg|png|webp)$/.test(file.type)) return alert("JPG, PNG, WEBP 사진만 올릴 수 있어요.");
@@ -501,6 +509,18 @@ export function DrawingBoard({
         <span className="sep" />
         <button className="tool" onClick={doUndo} disabled={!undo.current.length} title="되돌리기">↶<span className="sr">되돌리기</span></button>
         <button className="tool" onClick={doRedo} disabled={!redo.current.length} title="다시 실행">↷<span className="sr">다시 실행</span></button>
+        <span className="sep" />
+        <div className="pop-wrap">
+          <button className={`tool ${palette ? "on" : ""}`} onClick={() => setPalette((v) => !v)} aria-expanded={palette} title="스티커">
+            ♡<span className="sr">스티커</span>
+          </button>
+          {palette && <StickerPicker onSticker={addSticker} onGif={addGif} />}
+        </div>
+        <button className="tool" onClick={() => fileRef.current?.click()} disabled={uploading} title="사진">
+          {uploading ? "…" : "▣"}
+          <span className="sr">사진</span>
+        </button>
+        <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(e) => onPhoto(e.target.files?.[0])} />
       </div>
   );
 
@@ -542,7 +562,8 @@ export function DrawingBoard({
             onPointerUp={onItemUp}
             onDoubleClick={() => it.kind === "text" && setEditing(it.id)}
           >
-            {it.kind === "sticker" && <Sticker k={it.key!} />}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            {it.kind === "sticker" && (it.src ? <img src={it.src} alt="GIPHY 스티커" draggable={false} /> : <Sticker k={it.key!} />)}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             {it.kind === "photo" && <img src={it.src} alt="붙인 사진" draggable={false} />}
             {it.kind === "text" &&
