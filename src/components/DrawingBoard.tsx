@@ -501,26 +501,6 @@ export function DrawingBoard({
         <span className="sep" />
         <button className="tool" onClick={doUndo} disabled={!undo.current.length} title="되돌리기">↶<span className="sr">되돌리기</span></button>
         <button className="tool" onClick={doRedo} disabled={!redo.current.length} title="다시 실행">↷<span className="sr">다시 실행</span></button>
-        <span className="sep" />
-        <div className="pop-wrap">
-          <button className={`tool ${palette ? "on" : ""}`} onClick={() => setPalette((v) => !v)} aria-expanded={palette} title="스티커">
-            ♡<span className="sr">스티커</span>
-          </button>
-          {palette && (
-            <div className="sticker-pop" role="menu">
-              {Object.entries(STICKERS).map(([k, s]) => (
-                <button key={k} role="menuitem" onClick={() => addSticker(k)} title={s.label}>
-                  <Sticker k={k} />
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-        <button className="tool" onClick={() => fileRef.current?.click()} disabled={uploading} title="사진">
-          {uploading ? "…" : "▣"}
-          <span className="sr">사진</span>
-        </button>
-        <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(e) => onPhoto(e.target.files?.[0])} />
       </div>
   );
 

@@ -17,7 +17,7 @@ function dueIso(date: string, time: string) {
 }
 
 export function TodoView({ date: initDate }: { date?: string }) {
-  const { toast } = useApp();
+  const { toast, todosChanged } = useApp();
   const [date, setDate] = useState(initDate ?? today());
   const [todos, setTodos] = useState<Todo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,6 +62,7 @@ export function TodoView({ date: initDate }: { date?: string }) {
       await api("/api/todos", { method: "POST", json: { title, due_at: dueIso(date, draft.time) } });
       setDraft({ title: "", time: "" });
       await load();
+      todosChanged();
     } catch (e) {
       toast(e instanceof Error ? e.message : "추가하지 못했어요.");
     }
@@ -72,6 +73,7 @@ export function TodoView({ date: initDate }: { date?: string }) {
     try {
       await api(`/api/todos/${t.id}`, { method: "PATCH", json: { is_completed: !t.is_completed } });
       if (!t.is_completed) toast("완료! 참 잘했어요 💗");
+      todosChanged();
     } catch (e) {
       toast(e instanceof Error ? e.message : "바꾸지 못했어요.");
       void load();
@@ -87,6 +89,7 @@ export function TodoView({ date: initDate }: { date?: string }) {
       const day = t.due_at ? localYmdOf(t.due_at) : date;
       await api(`/api/todos/${t.id}`, { method: "PATCH", json: { title, description: t.description, due_at: time || t.due_at ? dueIso(day, time || oldTime) : null } });
       await load();
+      todosChanged();
     } catch (e) {
       toast(e instanceof Error ? e.message : "고치지 못했어요.");
     }
@@ -97,6 +100,7 @@ export function TodoView({ date: initDate }: { date?: string }) {
     try {
       await api(`/api/todos/${t.id}`, { method: "DELETE" });
       await load();
+      todosChanged();
     } catch (e) {
       toast(e instanceof Error ? e.message : "지우지 못했어요.");
     }

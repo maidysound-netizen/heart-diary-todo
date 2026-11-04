@@ -1926,3 +1926,270 @@ img {
 .hub-draw {
   touch-action: none;
 }
+
+/* ───── To-Do 버전: 클립보드 한 판 + 잔소리 토끼 ───── */
+.todo-app .desk {
+  position: absolute;
+  inset: 56px 0 0;
+  overflow: auto;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 28px;
+  padding: 8px 12px 24px;
+  background:
+    radial-gradient(circle at 20% 10%, #fff8fa 0, transparent 40%),
+    repeating-linear-gradient(90deg, #f3d3dc 0 2px, transparent 2px 46px),
+    var(--bg);
+}
+.brand-sub {
+  font-family: var(--font-hand), var(--font-body);
+  font-size: 16px;
+  margin-left: 8px;
+  padding: 1px 10px;
+  border-radius: 999px;
+  background: var(--rose);
+  color: #fff;
+  vertical-align: middle;
+}
+
+.todo-app .paper-stage {
+  position: static;
+  height: auto;
+  padding-top: 0;
+  pointer-events: auto;
+  gap: 12px;
+}
+
+/* 가죽 테두리 + 회색 판 + 위쪽 금속 집게 */
+.clipboard {
+  position: relative;
+  padding: 34px 18px 18px;
+  border-radius: 18px;
+  background:
+    repeating-linear-gradient(45deg, #ffffff10 0 2px, transparent 2px 5px),
+    linear-gradient(160deg, #e9b3c3, #c98ba0 55%, #b97790);
+  box-shadow: inset 0 0 0 7px #d9a0b2, inset 0 0 0 9px #f6d6df88, 0 22px 50px #a94c6855, 0 4px 10px #0002;
+}
+.clipboard::before {
+  /* 종이 아래 판 */
+  content: "";
+  position: absolute;
+  inset: 22px 10px 10px;
+  border-radius: 8px;
+  background: repeating-linear-gradient(0deg, #ffffff22 0 1px, transparent 1px 3px), #e7dcd8;
+  box-shadow: inset 0 1px 3px #0002;
+}
+.clipboard .paper {
+  animation: none;
+  border-radius: 6px;
+  box-shadow: 0 1px 0 #fff, 0 6px 14px #8a636033;
+}
+.clip {
+  position: absolute;
+  z-index: 6;
+  top: -14px;
+  left: 50%;
+  width: 46%;
+  min-width: 150px;
+  height: 46px;
+  transform: translateX(-50%);
+  border-radius: 10px 10px 6px 6px;
+  background: linear-gradient(#fbfbfd, #c9ccd4 45%, #eef0f4 60%, #a9adb7);
+  box-shadow: 0 4px 8px #0003, inset 0 -3px 0 #8d919b66;
+  pointer-events: none;
+}
+.clip::before {
+  /* 집게 손잡이 고리 */
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -12px;
+  width: 38%;
+  height: 22px;
+  transform: translateX(-50%);
+  border: 4px solid #b7bbc4;
+  border-bottom: none;
+  border-radius: 10px 10px 0 0;
+}
+.clip::after {
+  /* 리벳 두 개 */
+  content: "";
+  position: absolute;
+  top: 16px;
+  left: 14%;
+  right: 14%;
+  height: 10px;
+  background:
+    radial-gradient(circle at 5px 5px, #8d919b 3px, #e9ebef 4px, transparent 5px) left / 10px 10px no-repeat,
+    radial-gradient(circle at 5px 5px, #8d919b 3px, #e9ebef 4px, transparent 5px) right / 10px 10px no-repeat;
+}
+.todo-app .paper-tools {
+  border-style: solid;
+}
+
+/* 잔소리 토끼 */
+.bunny {
+  position: sticky;
+  top: 40%;
+  align-self: flex-start;
+  margin-top: 30vh;
+  width: 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  z-index: 20;
+}
+.bunny-say {
+  position: relative;
+  margin: 0;
+  background: #fff;
+  border: 2.5px solid var(--rose);
+  border-radius: 20px;
+  padding: 12px 14px;
+  font-family: var(--font-hand), var(--font-body);
+  font-size: 18px;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  box-shadow: 0 10px 24px #a94c6833;
+  animation: sayPop 0.35s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+.bunny-say::after {
+  content: "";
+  position: absolute;
+  bottom: -11px;
+  left: 50%;
+  width: 18px;
+  height: 18px;
+  background: #fff;
+  border-right: 2.5px solid var(--rose);
+  border-bottom: 2.5px solid var(--rose);
+  transform: translateX(-50%) rotate(45deg);
+}
+@keyframes sayPop {
+  from {
+    transform: scale(0.85);
+    opacity: 0;
+  }
+}
+.bunny.angry .bunny-say {
+  border-color: var(--danger);
+  background: #fff5f7;
+}
+.bunny.angry .bunny-say::after {
+  border-color: var(--danger);
+  background: #fff5f7;
+}
+.bunny-btn {
+  width: 120px;
+  height: 132px;
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  filter: drop-shadow(0 8px 12px #a94c6844);
+  animation: bob 3s ease-in-out infinite;
+}
+.bunny.angry .bunny-btn {
+  animation: stomp 0.5s ease-in-out 3, bob 3s ease-in-out 1.5s infinite;
+}
+@keyframes stomp {
+  25% {
+    transform: translateY(-10px) rotate(-8deg);
+  }
+  75% {
+    transform: translateY(-4px) rotate(8deg);
+  }
+}
+.bunny-menu {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+.bunny-menu button {
+  border: 1.5px solid var(--line);
+  background: #fff;
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 13px;
+  color: var(--ink);
+}
+.bunny-menu button.on {
+  background: var(--rose);
+  color: #fff;
+  border-color: var(--rose);
+}
+
+/* 로그인 전 */
+.welcome {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 32px;
+  min-height: 100%;
+  padding: 24px 0;
+}
+.welcome .login-card {
+  max-width: 400px;
+}
+.welcome h1 {
+  font-size: 28px;
+  color: var(--cherry);
+  margin: 0 0 8px;
+}
+.clipboard.preview {
+  width: min(320px, 80vw);
+  transform: rotate(-3deg);
+}
+.preview-paper {
+  position: relative;
+  display: block;
+  width: 100%;
+  border-radius: 6px;
+  box-shadow: 0 6px 14px #8a636033;
+}
+
+@media (max-width: 899px) {
+  .todo-app .desk {
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  /* 좁은 화면: 토끼는 도구 모음 아래에 말풍선과 나란히 */
+  .bunny {
+    position: static;
+    margin: 0 0 8px;
+    width: min(100%, 460px);
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+  }
+  .bunny-say {
+    flex: 1;
+    min-width: 0;
+    font-size: 15px;
+    padding: 9px 11px;
+  }
+  .bunny-say::after {
+    left: auto;
+    right: -11px;
+    bottom: auto;
+    top: 50%;
+    transform: translateY(-50%) rotate(-45deg);
+  }
+  .bunny-menu {
+    order: 3;
+    width: 100%;
+  }
+  .bunny-btn {
+    width: 72px;
+    height: 80px;
+  }
+  .brand-sub {
+    display: none;
+  }
+}

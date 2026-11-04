@@ -3,8 +3,8 @@ import { body, hand, script } from "@/lib/fonts";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Heart Diary — 하트 다이어리",
-  description: "하트 모양 3D 다이어리를 펼쳐 일기·할 일·주간·월간 계획을 기록하는 나만의 비공개 다이어리",
+  title: "Heart Diary To-Do — 잔소리 토끼",
+  description: "Todo 한 장에 할 일을 적고 펜으로 꾸미면, 옆에서 토끼가 마감을 잔소리해 주는 나만의 비공개 Todo 다이어리",
   robots: { index: false, follow: false },
 };
 

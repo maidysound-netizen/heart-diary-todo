@@ -1,6 +1,5 @@
 import { auth, devLoginEnabled, signIn, signOut } from "@/auth";
 import DiaryApp from "@/components/DiaryApp";
-import { script } from "@/lib/fonts";
 
 export default async function Home({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const session = await auth();
@@ -24,7 +23,6 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
     <DiaryApp
       user={session?.user?.id ? session.user : null}
       devLogin={devLoginEnabled}
-      titleFont={script.style.fontFamily}
       loginGoogle={loginGoogle}
       loginDev={loginDev}
       logout={logout}
