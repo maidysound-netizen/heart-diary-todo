@@ -125,7 +125,11 @@ export default function DiaryApp({
                 Todo 한 장에 할 일을 적고, 그 위에 펜으로 그리거나 글을 써요. 마감이 지나면 옆에 있는 토끼 모모가 귀엽게 잔소리해요.
                 Google로 로그인하면 나만 볼 수 있는 Todo가 만들어지고, 다시 로그인하면 그대로 불러와요.
               </p>
-              {authError && <p className="error">로그인에 실패했어요. 다시 시도해 주세요. ({authError})</p>}
+              {authError === "AccessDenied" ? (
+                <p className="error">초대받은 분만 쓸 수 있어요 🐰 초대받은 구글 계정으로 로그인해 주세요.</p>
+              ) : (
+                authError && <p className="error">로그인에 실패했어요. 다시 시도해 주세요. ({authError})</p>
+              )}
               <form action={loginGoogle}>
                 <button className="btn-google" type="submit">
                   <GoogleG /> Google로 계속하기
